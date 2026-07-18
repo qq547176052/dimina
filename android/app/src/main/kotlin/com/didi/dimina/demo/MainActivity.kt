@@ -1,7 +1,10 @@
+/**
+ * 宿主 Demo 主界面, 展示小程序列表并支持启动小程序
+ * 履历: 2026-07-18 简化主界面, 仅保留 Header 标题展示
+ */
 package com.didi.dimina.demo
 
 import android.Manifest
-import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -15,7 +18,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,10 +42,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,8 +51,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -62,7 +59,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowInsetsControllerCompat
-import com.didi.dimina.Dimina
 import com.didi.dimina.bean.MiniProgram
 import com.didi.dimina.common.Utils
 import com.didi.dimina.ui.theme.DiminaAndroidTheme
@@ -134,76 +130,19 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MiniProgramListScreen(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    var searchQuery by remember { mutableStateOf("") }
-    val allMiniPrograms = remember { context.getMiniProgramsList() }
-    val filteredMiniPrograms = remember(searchQuery, allMiniPrograms) {
-        if (searchQuery.isEmpty()) {
-            allMiniPrograms
-        } else {
-            allMiniPrograms.filter { it.name.contains(searchQuery, ignoreCase = true) }
-        }
-    }
-    val focusManager = LocalFocusManager.current
-
-    Column(
+    // Header
+    Box(
         modifier = modifier
-            .fillMaxSize()
-            .clickable(
-                onClick = {
-                    focusManager.clearFocus()
-                },
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            )
+            .fillMaxWidth()
             .background(bgColor)
-
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
     ) {
-        // Header
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(bgColor)
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "星河小程序",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = primaryTextColor
-            )
-        }
-        
-        // Search bar
-        SearchBar(
-            query = searchQuery,
-            onQueryChange = { searchQuery = it },
-            onSearch = { /* Additional search action if needed */ },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        )
-        
-        // App list title
         Text(
-            text = "应用列表",
-            modifier = Modifier
-                .padding(start = 16.dp, bottom = 8.dp),
-            fontSize = 16.sp,
-            color = secondaryTextColor,
-            fontWeight = FontWeight.Medium
-        )
-        
-        // Mini-program list
-        MiniProgramList(
-            miniPrograms = filteredMiniPrograms,
-            onMiniProgramClick = { miniProgram ->
-                // Handle mini-program click
-                if (context is Activity) {
-                    Dimina.getInstance().startMiniProgram(context, miniProgram)
-                }
-            }
+            text = "接收通知",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = primaryTextColor
         )
     }
 }
@@ -217,7 +156,7 @@ fun SearchBar(
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
-    
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -325,9 +264,9 @@ fun MiniProgramItem(
                 fontWeight = FontWeight.Bold
             )
         }
-        
+
         Spacer(modifier = Modifier.width(16.dp))
-        
+
         // Mini-program name
         Text(
             text = miniProgram.name,
@@ -351,14 +290,14 @@ fun Context.getMiniProgramsList(): List<MiniProgram> {
         }?:emptyList()
 
         val miniPrograms = mutableListOf<MiniProgram>()
-        
+
         // Convert to MiniProgram objects with consistent colors based on name
         for (jsonObject in configResults) {
             if (jsonObject == null) {
                 continue
             }
             val name = jsonObject.getString("name")
-            
+
             miniPrograms.add(MiniProgram(
                 appId =  jsonObject.getString("appId"),
                 name = name,
@@ -368,7 +307,7 @@ fun Context.getMiniProgramsList(): List<MiniProgram> {
                 updateManifestUrl = jsonObject.optString("updateManifestUrl", ""),
             ))
         }
-        
+
         return miniPrograms
     } catch (e: Exception) {
         Log.e("MainActivity", "Error reading config.json: ${e.message}")

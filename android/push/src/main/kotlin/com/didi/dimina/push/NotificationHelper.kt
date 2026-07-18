@@ -28,6 +28,7 @@ import java.net.URL
  * 履历: 2026-07-18 新建渠道时主动唤醒声音/震动服务, 应对 ROM 渠道属性变更后不响的问题
  * 履历: 2026-07-18 bigpicture 收起态回退标准图标+文字(横幅有图标), 仅下拉展开显示大图
  * 履历: 2026-07-18 新增 custom_thumb 模式(收起缩略图/展开大图)
+ * 履历: 2026-07-18 新增 close 选项, 点击仅关闭横幅不跳转 app(优先级高于 url/小程序)
  */
 object NotificationHelper {
     /** 渠道版本, 调整通知行为后自增以强制重建渠道(渠道创建后不可变) */
@@ -136,18 +137,31 @@ object NotificationHelper {
             builder.setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
         }
 
-        buildIntent(context, miniProgram, data)?.let { intent ->
+        val id = System.currentTimeMillis().toInt()
+        val closeOnly = data["close"]?.lowercase() == "true" || data["close"] == "1"
+        if (closeOnly) {
+            // 点击仅关闭横幅, 不跳转 app: 发送无接收者的广播 PendingIntent, 配合 autoCancel 关闭
             builder.setContentIntent(
-                PendingIntent.getActivity(
+                PendingIntent.getBroadcast(
                     context,
-                    System.currentTimeMillis().toInt(),
-                    intent,
+                    id,
+                    Intent("com.didi.dimina.push.ACTION_DISMISS_ONLY").setPackage(context.packageName),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
             )
+        } else {
+            buildIntent(context, miniProgram, data)?.let { intent ->
+                builder.setContentIntent(
+                    PendingIntent.getActivity(
+                        context,
+                        id,
+                        intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    )
+                )
+            }
         }
 
-        val id = System.currentTimeMillis().toInt()
         val image = data["image"]
         val style = data["style"]?.lowercase() ?: "custom"
 

@@ -79,14 +79,17 @@ class App : Application() {
   "image":   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAOUlEQVR42u3NMQ0AIBAEwZezmlCCMGqUfI0ONFz5ySbTTzVE2B0pAwMDA4MRAWdF3iViYGBgYDAi+MoOqkz2a0leAAAAAElFTkSuQmCC"
 }
 
-
+***使用这个模式
+https://www.lddgo.net/convert/imagebasesix
+上面链接能将图片转为 base64
 小缩略图+下拉展开大图
 {
   "title":   "通知标题",
   "content": "模式=custom_thumb",
   "level":   "high",
   "style":   "custom_thumb",
-  "image":   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAOUlEQVR42u3NMQ0AIBAEwZezmlCCMGqUfI0ONFz5ySbTTzVE2B0pAwMDA4MRAWdF3iViYGBgYDAi+MoOqkz2a0leAAAAAElFTkSuQmCC"
+  "image":   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAOUlEQVR42u3NMQ0AIBAEwZezmlCCMGqUfI0ONFz5ySbTTzVE2B0pAwMDA4MRAWdF3iViYGBgYDAi+MoOqkz2a0leAAAAAElFTkSuQmCC",
+  "close":   "true"
 }
 
 
@@ -109,7 +112,8 @@ class App : Application() {
   "image":   "https://...png",  // 可选 图片URL 或 data:image base64, 带图通知
                              //   base64 内嵌不依赖网络下载, 适合内网/证书不可达场景
   "style":   "custom",        // 可选 图片展示方式: custom(默认, 自定义UI 收起即显示图) / custom_big(自定义UI 仅展开显示图, 需下拉) / bigpicture(系统大图样式)
-  "url":     "https://..."      // 可选 点击跳转网页, 优先于小程序跳转
+  "url":     "https://...",     // 可选 点击跳转网页, 优先级 url > 小程序 > app
+  "close":   "true"             // 可选 点击仅关闭横幅不跳转 app(优先级最高, 默认 false)
 }
 
 
