@@ -78,6 +78,13 @@ describe('Bridge resource loading protocol', () => {
 
 		bridge.pageHide()
 		bridge.start()
+		expect(jscore.postMessage.mock.calls[0][0]).toMatchObject({
+			type: 'loadResource',
+			body: {
+				scene: 1001,
+				query: {},
+			},
+		})
 		bridge.messageInvoke('service', {
 			type: 'serviceResourceLoaded',
 			target: 'service',

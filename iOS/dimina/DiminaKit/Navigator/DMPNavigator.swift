@@ -67,6 +67,19 @@ public class DMPNavigator: NSObject {
         } as? DMPTabBarContainerController
     }
 
+    private func hostViewControllers(in navigationController: UINavigationController) -> [UIViewController] {
+        return Array(navigationController.viewControllers.prefix {
+            !($0 is DMPPageController) && !($0 is DMPTabBarContainerController)
+        })
+    }
+
+    private func clearMiniProgramPageState() {
+        pageRecords.reversed().forEach { pageLifecycle?.onUnload(webviewId: $0.webViewId) }
+        tabBarContainerController?.destroy()
+        tabBarContainerController = nil
+        pageRecords.removeAll()
+    }
+
     private func updateRootTabRecord(_ pageRecord: DMPPageRecord) {
         if pageRecords.isEmpty {
             pageRecords.append(pageRecord)
@@ -361,13 +374,43 @@ public class DMPNavigator: NSObject {
         }
 
         navigationController.view.endEditing(true)
-        pageRecords.reversed().forEach { pageLifecycle?.onUnload(webviewId: $0.webViewId) }
-        tabBarContainerController?.destroy()
-        tabBarContainerController = nil
-        navigationController.popToRootViewController(animated: animated)
-        pageRecords.removeAll()
+        let hostControllers = hostViewControllers(in: navigationController)
+        clearMiniProgramPageState()
 
-        await launch(to: path, query: query, animated: animated, showsLaunchLoading: false)
+        await launch(to: path, query: query, animated: false, showsLaunchLoading: false)
+
+        guard let newRootController = navigationController.topViewController else {
+            return
+        }
+        navigationController.setViewControllers(
+            hostControllers + [newRootController],
+            animated: animated
+        )
+    }
+
+    @MainActor
+    public func closeMiniProgram(
+        animated: Bool = true,
+        completion: @escaping () -> Void
+    ) {
+        guard let navigationController = navigationController else {
+            completion()
+            return
+        }
+
+        navigationController.view.endEditing(true)
+        let hostControllers = hostViewControllers(in: navigationController)
+        clearMiniProgramPageState()
+
+        if hostControllers.isEmpty {
+            navigationController.dismiss(animated: animated, completion: completion)
+            return
+        }
+
+        CATransaction.begin()
+        CATransaction.setCompletionBlock(completion)
+        navigationController.setViewControllers(hostControllers, animated: animated)
+        CATransaction.commit()
     }
 
     @MainActor
@@ -447,11 +490,9 @@ public class DMPNavigator: NSObject {
         updateRootTabRecord(pageRecord)
         tabBarContainerController = tabBarController
 
-        var nextViewControllers = navigationController.viewControllers.prefix {
-            !($0 is DMPPageController) && !($0 is DMPTabBarContainerController)
-        }
+        var nextViewControllers = hostViewControllers(in: navigationController)
         nextViewControllers.append(tabBarController)
-        navigationController.setViewControllers(Array(nextViewControllers), animated: animated)
+        navigationController.setViewControllers(nextViewControllers, animated: animated)
 
         pageLifecycle?.onShow(webviewId: pageRecord.webViewId)
         return true

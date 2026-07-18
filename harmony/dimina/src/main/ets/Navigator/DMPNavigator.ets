@@ -233,6 +233,15 @@ export class DMPNavigator {
     }
   }
 
+  closeAllPages(animated: boolean = false) {
+    const pageCount = this._stacks.size()
+    for (let i = 0; i < pageCount; i++) {
+      this.pageLifecycle.onUnload(this.app.currentWebViewId)
+      DRouter.getInstance().pop(animated)
+      this.popPageRecord()
+    }
+  }
+
   async navigateBack(delta: number, animated: boolean = true, canDestroy = true, isReLaunch = false) {
     DMPLogger.d(Tags.NAVIGATOR, 'navigateBack')
     this.pop(delta, animated, canDestroy, isReLaunch)

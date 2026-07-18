@@ -156,6 +156,8 @@ export class Bridge {
 				resourceLoadId: this.resourceLoadId,
 				appId: this.opts.appId,
 				pagePath: this.opts.pagePath,
+				scene: this.opts.scene,
+				query: this.opts.query,
 				root: this.opts.root,
 				baseUrl: import.meta.env.BASE_URL,
 				hostEnv: this.parent.getHostEnvSnapshot(),

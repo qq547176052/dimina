@@ -21,11 +21,12 @@ class Service {
 
 	init() {
 		this.message.on('loadResource', (msg) => {
-			const { appId, bridgeId, pagePath, root = '.', baseUrl = '/', hostEnv: hostEnvSnapshot } = msg
+			const { appId, bridgeId, pagePath, root = '.', baseUrl = '/', hostEnv: hostEnvSnapshot, query, resourceLoadId, scene } = msg
 			if (hostEnvSnapshot) {
 				hostEnv.init(hostEnvSnapshot)
 			}
-			loader.loadResource({ appId, bridgeId, pagePath, root, baseUrl })
+			runtime.setAppLaunchOptions({ scene, pagePath, query })
+			loader.loadResource({ appId, bridgeId, pagePath, root, baseUrl, resourceLoadId })
 		})
 
 		this.message.on('hostEnvUpdate', (patch) => {
@@ -107,10 +108,9 @@ class Service {
 	}
 
 	onAppMsg() {
-		// 创建 app 实例
+		// 双线程资源就绪后创建首个页面实例
 		this.message.on('resourceLoaded', (msg) => {
-			const { bridgeId, scene, pagePath, query, stackId } = msg
-			runtime.createApp({ scene, pagePath, query })
+			const { bridgeId, pagePath, query, stackId } = msg
 
 			const module = loader.getModuleByPath(pagePath)
 			if (!module) {

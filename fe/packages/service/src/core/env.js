@@ -38,8 +38,10 @@ class Env {
 		/**
 		 * https://developers.weixin.qq.com/miniprogram/dev/framework/app-service/app.html
 		 */
-		globalThis.App = moduleInfo =>
+		globalThis.App = (moduleInfo = {}) => {
 			loader.createAppModule(moduleInfo)
+			runtime.createApp()
+		}
 
 		globalThis.Page = (moduleInfo) => {
 			loader.createModule(moduleInfo, globalThis.__extraInfo, PageModule.type)
@@ -60,13 +62,8 @@ class Env {
 		 * 获取到小程序全局唯一的 App 实例
 		 * https://developers.weixin.qq.com/miniprogram/dev/reference/api/getApp.html
 		 */
-		globalThis.getApp = (options) => {
-			const app = runtime.app
-			if (!app && options?.allowDefault) {
-				return {}
-			}
-			return app
-		}
+		globalThis.getApp = options =>
+			runtime.getApp(options)
 
 		/**
 		 * 获取当前页面栈。数组中第一个元素为首页，最后一个元素为当前页面

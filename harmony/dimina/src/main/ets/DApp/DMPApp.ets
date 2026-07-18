@@ -209,6 +209,18 @@ export class DMPApp {
     setTimeout(launchMain, 100);
   }
 
+  async reEnter(config?: DMPLaunchConfig) {
+    const currentLaunchConfig = this.navigatorManager.getCurNavigator()?.getLaunchConfig()
+    const nextLaunchConfig = currentLaunchConfig ?? config ?? new DMPLaunchConfig()
+    if (config) {
+      nextLaunchConfig.appEntryPath = config.appEntryPath
+      nextLaunchConfig.query = config.query
+    }
+    this.navigatorManager.closeAllNavigators(false)
+    await this.startMainService()
+    this.launch(nextLaunchConfig)
+  }
+
   resetAndStartDimina(config: DMPLaunchConfig) {
     this._service = new DMPService(this.appIndex);
     this._render = new DMPRender(this);
@@ -285,6 +297,7 @@ export class DMPApp {
   }
 
   public closeDimina() {
+    this.navigatorManager.closeAllNavigators(false)
     this.destroyEngine()
     this.destroyApp()
     DMPLogger.i(Tags.LAUNCH, 'Doing something in closeApp')

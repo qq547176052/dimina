@@ -9,9 +9,21 @@ import router from './router'
 
 class Runtime {
 	constructor() {
-		this.app = null
+		this.app = undefined
+		this.defaultApp = {}
+		this.appLaunchOptions = {}
 		this.instances = {}
 		this.pageStates = new Map()
+	}
+
+	setAppLaunchOptions(options) {
+		if (!this.app) {
+			this.appLaunchOptions = options
+		}
+	}
+
+	getApp(options = {}) {
+		return options.allowDefault ? this.app || this.defaultApp : this.app
 	}
 
 	getPageState(bridgeId) {
@@ -60,14 +72,14 @@ class Runtime {
 		console.warn(`[service] triggerEvent ${bridgeId} ${moduleId}, is: ${instance.is}, method: ${methodName} is not exist`)
 	}
 
-	createApp(opts) {
+	createApp(opts = this.appLaunchOptions) {
 		// app 实例只有一个，避免重复创建
 		if (this.app) {
 			console.log('[service] app instance already existed')
 			return
 		}
 
-		const { scene, pagePath: path, query } = opts
+		const { scene, pagePath: path, query } = opts || {}
 		const appModule = loader.getAppModule()
 
 		if (!appModule) {
@@ -77,6 +89,10 @@ class Runtime {
 
 		console.log('[service] create app instance')
 
+		// 与微信基础库一致：allowDefault 返回的占位对象会在 App 声明时
+		// 覆盖合并到 App 配置中，随后为下一次声明重置占位对象。
+		Object.assign(appModule.moduleInfo, this.defaultApp)
+		this.defaultApp = {}
 		this.app = new App(appModule, {
 			scene,
 			path,
