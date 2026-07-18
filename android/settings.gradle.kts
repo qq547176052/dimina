@@ -28,3 +28,4 @@ rootProject.name = "Dimina Android"
 include(":app")
 include(":engine_qjs")
 include(":dimina")
+include(":push")

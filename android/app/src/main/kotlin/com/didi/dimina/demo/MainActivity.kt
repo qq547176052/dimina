@@ -1,13 +1,18 @@
 package com.didi.dimina.demo
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.SystemBarStyle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -71,11 +76,22 @@ private val tertiaryTextColor = Color(0xFF86909C)
 
 /**
  * Author: Doslin
+ * 履历: 2026-07-18 加入 POST_NOTIFICATIONS 权限申请
  */
 class MainActivity : ComponentActivity() {
 
+    /** Android 13+ 通知权限申请器 */
+    private val notifyPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) {
+            Log.w("MainActivity", "POST_NOTIFICATIONS 未授予, 推送通知可能无法展示")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestNotificationPermission()
         val systemBarColor = bgColor.toArgb()
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(systemBarColor, systemBarColor),
@@ -101,6 +117,17 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    /** Android 13+ 运行时申请通知权限 */
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        when {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED -> {
+                // 已授权, 无需处理
+            }
+            else -> notifyPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 }

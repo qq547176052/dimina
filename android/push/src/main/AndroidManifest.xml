@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 通知渠道震动所需(部分 ROM 校验应用自身震动权限) -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- 启动前台服务所需 (API 28+) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- remoteMessaging 前台服务类型所需 (API 34+) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+
+    <application>
+        <service
+            android:name=".MqttPushService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging" />
+    </application>
+
+</manifest>
