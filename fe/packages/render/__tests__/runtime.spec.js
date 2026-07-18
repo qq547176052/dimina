@@ -750,7 +750,7 @@ describe('runtime template components', () => {
 			page: element.hasAttribute('data-v-page-style-scope'),
 			shared: element.hasAttribute('data-v-shared-component-scope'),
 		}))).toEqual([
-			{ className: 'style-page dd-page', app: true, page: true, shared: true },
+			{ className: 'style-page', app: true, page: true, shared: true },
 			{ className: 'applied-host', app: true, page: true, shared: true },
 			{ className: 'applied-inner', app: true, page: true, shared: true },
 			{ className: 'shared-host', app: true, page: true, shared: true },

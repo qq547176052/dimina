@@ -207,6 +207,7 @@ class DiminaActivity : ComponentActivity() {
     
     private var adjustBottom = 0.0
     private var updateCheckStarted = false
+    private var preserveMiniAppOnDestroy = false
 
     // 屏幕高度
     private var screenHeight = 0
@@ -351,11 +352,6 @@ class DiminaActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        if (intent.getBooleanExtra(CLOSE_MINI_PROGRAM_KEY, false)) {
-            finish()
-            return
-        }
-        
         // 获取屏幕高度
         screenHeight = resources.displayMetrics.heightPixels
 
@@ -385,6 +381,7 @@ class DiminaActivity : ComponentActivity() {
         try {
             miniApp = MiniApp.getInstance()
             miniProgram = program
+            activityRegistry.register(miniProgram.appId, this)
             LogUtils.d(
                 tag,
                 "Successfully obtained MiniApp instance and JsCore for appId: ${miniProgram.appId}"
@@ -431,11 +428,6 @@ class DiminaActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-
-        if (intent.getBooleanExtra(CLOSE_MINI_PROGRAM_KEY, false)) {
-            finish()
-            return
-        }
 
         if (intent.getBooleanExtra(APPLY_UPDATE_RESTART_KEY, false)) {
             getMiniProgramFromIntent(intent)?.let { program ->
@@ -1302,6 +1294,10 @@ class DiminaActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (::miniProgram.isInitialized) {
+            activityRegistry.unregister(miniProgram.appId, this)
+        }
+
         val bridgesToDestroy = buildList {
             bridge?.let { add(it) }
             tabPageStates.values.forEach { state ->
@@ -1314,10 +1310,10 @@ class DiminaActivity : ComponentActivity() {
         }
         clearAllNativeComponents()
 
-        if (miniApp.isBridgeListEmpty(miniProgram.appId)) {
+        if (!preserveMiniAppOnDestroy && miniApp.isBridgeListEmpty(miniProgram.appId)) {
             // Clear resources for this specific MiniProgram
             miniApp.clear(miniProgram.appId)
-        } else if (miniApp.isBridgeListEmpty()) {
+        } else if (!preserveMiniAppOnDestroy && miniApp.isBridgeListEmpty()) {
             miniApp.clearAll()
         }
         super.onDestroy()
@@ -1536,22 +1532,20 @@ class DiminaActivity : ComponentActivity() {
     }
 
     private fun closeMiniProgram() {
-        val closeIntent = Intent(this, DiminaActivity::class.java).apply {
-            putExtra(MINI_PROGRAM_KEY, miniProgram.copy(root = true))
-            putExtra(CLOSE_MINI_PROGRAM_KEY, true)
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        activityRegistry.closeAll(miniProgram.appId) { activity ->
+            activity.finish()
         }
-        startActivity(closeIntent)
-        finish()
     }
 
     private fun reenterMiniProgram() {
         val entryPagePath = getDefaultEntryPagePath() ?: miniProgram.path
-        DiminaActivity.launch(
-            this,
-            miniProgram.copy(root = true, path = entryPagePath),
-            Intent.FLAG_ACTIVITY_CLEAR_TOP
-        )
+        val reentryProgram = miniProgram.copy(root = true, path = entryPagePath)
+
+        activityRegistry.closeAll(miniProgram.appId) { activity ->
+            activity.preserveMiniAppOnDestroy = true
+            activity.finish()
+        }
+        DiminaActivity.launch(this, reentryProgram)
     }
 
     fun applyUpdate() {
@@ -1956,8 +1950,8 @@ class DiminaActivity : ComponentActivity() {
 
     companion object {
         const val MINI_PROGRAM_KEY = "mini_program"
-        private const val CLOSE_MINI_PROGRAM_KEY = "close_mini_program"
         private const val APPLY_UPDATE_RESTART_KEY = "apply_update_restart"
+        private val activityRegistry = MiniProgramActivityRegistry<DiminaActivity>()
 
         fun launch(
             context: Context,

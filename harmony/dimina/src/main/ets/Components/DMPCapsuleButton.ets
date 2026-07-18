@@ -68,7 +68,7 @@ export struct DMPCapsuleButton {
         if (this.onCloseClick) {
           this.onCloseClick()
         } else {
-          DMPAppManager.sharedInstance().getApp(this.appIndex)?.navigatorManager.getCurNavigator()?.pop(999)
+          DMPAppManager.sharedInstance().getApp(this.appIndex)?.closeDimina()
         }
       })
     }

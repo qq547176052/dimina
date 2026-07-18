@@ -598,21 +598,10 @@ public class DMPPageController: UIViewController {
         customNavigationCapsuleMoreButton?.isEnabled = false
         customNavigationCapsuleCloseButton?.isEnabled = false
 
-        if let navigationController = navigationController {
-            navigationController.view.endEditing(true)
-            if navigationController.viewControllers.first === self {
-                navigationController.dismiss(animated: true) {
-                    appToDestroy?.destroy()
-                }
-                return
-            }
-
-            CATransaction.begin()
-            CATransaction.setCompletionBlock {
+        if let navigator = navigator {
+            navigator.closeMiniProgram {
                 appToDestroy?.destroy()
             }
-            navigationController.popToRootViewController(animated: true)
-            CATransaction.commit()
         } else {
             dismiss(animated: true) {
                 appToDestroy?.destroy()

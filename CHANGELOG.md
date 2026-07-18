@@ -1,5 +1,20 @@
 # Changelog
 
+## [v1.4.1] 2026-07-17
+
+### 优化
+
+- 优化小程序 App 初始化与资源加载时序，确保 `scene`、`path` 和 `query` 在 App 实例创建前正确传递。
+- 完善 `getApp({ allowDefault: true })` 语义，支持 App 声明前的默认对象获取与属性合并。
+- 优化 Android、iOS 和 HarmonyOS 的小程序关闭、重新进入和页面栈清理，避免多页面/多容器场景下的残留状态或资源误释放。
+- Android 新增小程序 Activity 注册管理，完善同一 `appId` 下多 Activity 的生命周期与统一关闭处理。
+- 优化 PageFrame 页面根节点结构与样式挂载，并完善项目混合页示例。
+
+### 兼容性
+
+- Android、iOS 和 HarmonyOS SDK 版本统一升级到 1.4.1。
+- JSSDK 升级到 1.0.18。
+
 ## [v1.4.0] 2026-07-17
 
 ### 新增
@@ -30,7 +45,7 @@
 
 - Android、iOS 和 HarmonyOS SDK 版本统一升级到 1.4.0。
 - 编译器升级到 1.1.0，Node.js 最低版本要求调整为 20。
-- JSSDK 升级到 1.0.16。
+- JSSDK 升级到 1.0.17。
 
 ## [v1.3.1] 2026-05-29
 

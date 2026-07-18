@@ -723,7 +723,7 @@ class Runtime {
 							})
 						},
 					}, {
-						default: () => h(_component_dd_page, { class: 'dd-page' }),
+						default: () => h(_component_dd_page),
 						// fallback: () => h('div', 'Loading...'),
 					})
 				},

@@ -106,6 +106,18 @@ export class DMPNavigatorManager {
     this._currentTabWebViewId = -1
   }
 
+  closeAllNavigators(animated: boolean = false) {
+    const navigators = this._navigatorDelegateStack.data.slice().reverse()
+    navigators.forEach((navigatorDelegate) => {
+      navigatorDelegate.getNavigator().closeAllPages(animated)
+    })
+    while (!this._navigatorDelegateStack.isEmpty()) {
+      this.popNavigator()
+    }
+    this.clear()
+    this.notifyPopListener()
+  }
+
   pushNavigator(navigatorDelegate: DMPNavigatorDelegate): DMPNavigatorDelegate {
     DMPLogger.i(Tags.DMP_PAGE,
       `showStack  stackId->${navigatorDelegate.id}`)

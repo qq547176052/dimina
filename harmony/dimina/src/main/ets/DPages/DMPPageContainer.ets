@@ -230,11 +230,11 @@ export struct DMPPageContainer {
     const launchConfig = new DMPLaunchConfig()
     launchConfig.appEntryPath = this.app.bundleManager.getJsAppModuleConfig().entryPagePath
     launchConfig.query = new DMPMap()
-    this.app.reLaunchRootStack(launchConfig)
+    this.app.reEnter(launchConfig)
   }
 
   private closeMiniProgram() {
-    this.app.navigatorManager.getCurNavigator()?.pop(999)
+    this.app.closeDimina()
   }
 
   private shouldShowTabBar(): boolean {
