@@ -120,6 +120,27 @@ https://www.lddgo.net/convert/imagebasesix
   "image":   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAOUlEQVR42u3NMQ0AIBAEwZezmlCCMGqUfI0ONFz5ySbTTzVE2B0pAwMDA4MRAWdF3iViYGBgYDAi+MoOqkz2a0leAAAAAElFTkSuQmCC"
 }
 
+
+{
+  "title":   "通知标题",
+  "content": "通知正文",
+  "level":   "high",
+  "image":   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAOUlEQVR42u3NMQ0AIBAEwZezmlCCMGqUfI0ONFz5ySbTTzVE2B0pAwMDA4MRAWdF3iViYGBgYDAi+MoOqkz2a0leAAAAAElFTkSuQmCC",
+  "max_image":         "https://img-s.msn.cn/tenant/amp/entityid/AA28gbLQ.img?w=534&h=486&m=6&x=3&y=308&s=804&d=338",
+  "style":   "custom_thumb",
+  "miniProgram": {
+    "appId": "wxd58cedf6d1e1c52c",
+    "name":  "可选 名称",
+    "path":  "page/tabBar/component/max_image"
+  },
+  "close":   "false"
+}
+
+
+
+
+
+
 {
   "title":   "通知标题",        // 可选, 缺省 "通知"
   "content": "通知正文",         // 正文内容 (也可用 "body")

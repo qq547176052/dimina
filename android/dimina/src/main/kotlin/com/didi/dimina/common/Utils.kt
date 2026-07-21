@@ -106,6 +106,10 @@ object Utils {
                 ?: appWindowConfig.backgroundColor ?: "#fff",
             navigationStyle = pagePrivateConfig.navigationStyle
                 ?: appWindowConfig.navigationStyle ?: "default",
+            capsuleStyle = pagePrivateConfig.capsuleStyle
+                ?: appWindowConfig.capsuleStyle ?: "default",
+            canClose = pagePrivateConfig.canClose
+                ?: appWindowConfig.canClose ?: true,
             usingComponents = pagePrivateConfig.usingComponents ?: emptyMap()
         )
     }

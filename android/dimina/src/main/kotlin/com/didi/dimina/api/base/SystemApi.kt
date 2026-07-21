@@ -122,7 +122,12 @@ class SystemApi : BaseApiHandler() {
     }
 
     private fun getSystemInfo(currentActivity: Activity): JSONObject {
-        return Utils.getMiniProgramSystemInfo(currentActivity)
+        val info = Utils.getMiniProgramSystemInfo(currentActivity)
+        if (currentActivity is DiminaActivity) {
+            info.put("appVersion", currentActivity.getMiniProgram().versionName)
+            info.put("appVersionCode", currentActivity.getMiniProgram().versionCode)
+        }
+        return info
     }
 
     private fun getBluetoothStatus(activity: Activity): Boolean {

@@ -16,6 +16,7 @@ import android.view.animation.AccelerateDecelerateInterpolator
 import android.webkit.WebView
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -136,6 +137,8 @@ class DiminaActivity : ComponentActivity() {
 
     // UI state for navigation bar
     private val showNavigationBar = mutableStateOf(true)
+    private val showCapsule = mutableStateOf(true)
+    private val canClose = mutableStateOf(true)
     private val navigationBarTitle = mutableStateOf("")
     private val navigationBarTextColor = mutableStateOf(Color.Black)
     private val navigationBarBackgroundColor = mutableStateOf("#FFFFFF")
@@ -359,6 +362,17 @@ class DiminaActivity : ComponentActivity() {
         // 获取屏幕高度
         screenHeight = resources.displayMetrics.heightPixels
 
+        // 拦截返回键:首页移至后台,非首页正常回退
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (!canClose.value && miniProgram.root) {
+                    moveTaskToBack(true)
+                } else {
+                    finish()
+                }
+            }
+        })
+
         // 设置键盘监听
         getSoftKeyboardHeight(window.decorView.rootView) { keyBoardHeight ->
             withWebView { webView ->
@@ -373,10 +387,12 @@ class DiminaActivity : ComponentActivity() {
             }
         }
 
-        // 接收 MiniProgram 对象
+        // 接收 MiniProgram 对象:优先从 Intent 获取,LAUNCHER 启动时兜底使用 Dimina 默认
         val program = getMiniProgramFromIntent(intent)
+            ?: Dimina.getInstance().getDefaultMiniProgram()
 
         if (program == null) {
+            LogUtils.e(tag, "No MiniProgram provided. Start DiminaActivity with a MiniProgram intent extra, or set a default via Dimina.setDefaultMiniProgram().")
             finish()
             return
         }
@@ -614,6 +630,12 @@ class DiminaActivity : ComponentActivity() {
     private fun setInitialStyle(config: MergedPageConfig) {
         // Set navigation bar visibility based on navigationStyle
         showNavigationBar.value = config.navigationStyle != "custom"
+
+        // Set capsule visibility based on capsuleStyle
+        showCapsule.value = config.capsuleStyle != "none"
+
+        // Set canClose flag
+        canClose.value = config.canClose
 
         // Set navigation bar title
         navigationBarTitle.value = config.navigationBarTitleText
@@ -1504,7 +1526,7 @@ class DiminaActivity : ComponentActivity() {
                 )
             }
 
-            if (!isLoading.value) {
+            if (!isLoading.value && showCapsule.value) {
                 val configuration = LocalConfiguration.current
                 val (windowInfo, menuRect) = remember(
                     configuration.screenWidthDp,
@@ -1536,6 +1558,10 @@ class DiminaActivity : ComponentActivity() {
     }
 
     private fun closeMiniProgram() {
+        if (!canClose.value && miniProgram.root) {
+            moveTaskToBack(true)
+            return
+        }
         activityRegistry.closeAll(miniProgram.appId) { activity ->
             activity.finish()
         }

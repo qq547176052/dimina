@@ -15,3 +15,5 @@ example/*
 !example/vant
 !example/taro-todo
 !example/mpx-demo
+# 首页
+!example/admin_app

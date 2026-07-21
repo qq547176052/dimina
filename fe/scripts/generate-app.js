@@ -1,5 +1,9 @@
 #!/usr/bin/env node
-
+/**
+ * 根据 packages/container/public 下的小程序目录生成 shared/jsapp 中的应用配置与 zip 包。
+ * 履历:
+ * - 2026-07-21 适配 archiver@8(纯 ESM,改用命名导出 ZipArchive 与 new 构造)
+ */
 const fs = require('node:fs')
 const path = require('node:path')
 const process = require('node:process')
@@ -10,11 +14,11 @@ const sharedJsappPath = path.resolve(__dirname, '../../shared/jsapp')
 
 // Helper function to create zip file
 async function createZip(sourceDir, outputPath) {
-	const { default: archiver } = await import('archiver')
+	const { ZipArchive } = await import('archiver')
 
 	return new Promise((resolve, reject) => {
 		const output = fs.createWriteStream(outputPath)
-		const archive = archiver('zip', {
+		const archive = new ZipArchive({
 			zlib: { level: 9 }, // Maximum compression
 		})
 

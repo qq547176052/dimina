@@ -20,6 +20,8 @@ data class MergedPageConfig(
     val navigationBarTextStyle: String,
     val backgroundColor: String,
     val navigationStyle: String,
+    val capsuleStyle: String,
+    val canClose: Boolean,
     val usingComponents: Map<String, String>
 )
 

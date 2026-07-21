@@ -7,6 +7,8 @@ import com.didi.dimina.bean.MiniProgram
 import com.didi.dimina.common.LogUtils
 import com.didi.dimina.common.StoreUtils
 import com.didi.dimina.core.MiniApp
+import org.json.JSONObject
+import java.io.File
 
 /**
  * Author: Doslin
@@ -87,6 +89,53 @@ class Dimina private constructor(context: Context) {
     // 初始化核心组件
     private fun setupCoreComponents() {
         StoreUtils.initialize(context = appContext)
+    }
+
+    // 默认小程序（LAUNCHER 启动时使用）
+    private var defaultMiniProgram: MiniProgram? = null
+
+    /**
+     * 设置默认小程序，在 DiminaActivity 作为 LAUNCHER 时使用。
+     */
+    fun setDefaultMiniProgram(miniProgram: MiniProgram) {
+        defaultMiniProgram = miniProgram
+    }
+
+    /**
+     * 获取默认小程序。
+     */
+    fun getDefaultMiniProgram(): MiniProgram? = defaultMiniProgram
+
+    /**
+     * 根据 appId 动态读取小程序元信息（config.json），构建 MiniProgram。
+     * 优先读取已解压目录 filesDir/jsapp/<appId>/config.json，
+     * 回退到内置资源 assets/jsapp/<appId>/config.json。
+     * 该小程序作为首页（root=true）。
+     */
+    fun getMiniProgram(appId: String): MiniProgram? {
+        val extracted = File(appContext.filesDir, "jsapp/$appId/config.json")
+        val configText = if (extracted.exists()) {
+            runCatching { extracted.readText() }.getOrNull()
+        } else {
+            runCatching {
+                appContext.assets.open("jsapp/$appId/config.json").bufferedReader().use { it.readText() }
+            }.getOrNull()
+        }
+        if (configText == null) {
+            LogUtils.e("Dimina", "config.json not found for appId: $appId")
+            return null
+        }
+        return runCatching {
+            val obj = JSONObject(configText)
+            MiniProgram(
+                appId = obj.optString("appId", appId),
+                name = obj.optString("name", ""),
+                versionCode = obj.optInt("versionCode", 0),
+                versionName = obj.optString("versionName", ""),
+                root = true,
+                path = obj.optString("path", null),
+            )
+        }.getOrNull()
     }
 
     // 应用配置

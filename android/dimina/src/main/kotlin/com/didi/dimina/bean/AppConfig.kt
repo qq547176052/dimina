@@ -29,6 +29,8 @@ data class WindowConfig(
     val navigationBarBackgroundColor: String? = null,
     val backgroundColor: String? = null,
     val navigationStyle: String? = null,
+    val capsuleStyle: String? = null,
+    val canClose: Boolean? = null,
 )
 
 @Serializable
@@ -71,5 +73,7 @@ data class PageModule(
     val navigationBarTextStyle: String? = null,
     val backgroundColor: String? = null,
     val navigationStyle: String? = null,
+    val capsuleStyle: String? = null,
+    val canClose: Boolean? = null,
     val usingComponents: Map<String, String>? = null
 )
