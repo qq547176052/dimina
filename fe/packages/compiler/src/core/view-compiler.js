@@ -13,6 +13,7 @@ import { toMiniProgramModuleId } from '../common/path-utils.js'
 import { collectAssets, getAbsolutePath, tagWhiteList, transformRpx } from '../common/utils.js'
 import { getAppId, getComponent, getContentByPath, getTargetPath, getTemplateExts, getViewScriptExts, getViewScriptTags, getWorkPath, resetStoreInfo } from '../env.js'
 import { parseBindings } from '../common/expression-parser.js'
+import { concatSourcemap, createLineSourcemap, mergeSourcemap, remapSourcemap } from './sourcemap.js'
 
 /**
  * 根据扩展名列表生成匹配尾部扩展名的正则，如 ['.wxs', '.qds'] -> /(\.wxs|\.qds)$/
@@ -192,10 +193,13 @@ const wxsModuleRegistry = new Set()
 // wxs 文件路径映射表，用于快速查找模块对应的文件路径
 const wxsFilePathMap = new Map()
 
+let enableSourcemap = false
+
 if (!isMainThread) {
-	parentPort.on('message', async ({ pages, storeInfo }) => {
+	parentPort.on('message', async ({ pages, storeInfo, sourcemap }) => {
 		try {
 			resetStoreInfo(storeInfo)
+			enableSourcemap = !!sourcemap
 
 			const progress = {
 				_completedTasks: 0,
@@ -254,55 +258,60 @@ async function compileML(pages, root, progress) {
 
 	for (const page of pages) {
 		const scriptRes = new Map()
-		buildCompileView(page, false, scriptRes, new Set(), new Set())
-
-		let mergeRender = ''
-
-		for (const [key, value] of scriptRes.entries()) {
-			const amdFormat = `modDefine('${key}', function(require, module, exports) {
-		${value}
-		});`
-			try {
-				const { code: minifiedCode } = await transform(amdFormat, {
-					minify: true,
-					target: ['es2020'],
-					platform: 'browser',
-				})
-				mergeRender += minifiedCode
-			}
-			catch (error) {
-				const location = error.errors?.[0]?.location
-				const sourceLines = amdFormat.split('\n')
-				const sourceHint = location?.line
-					? sourceLines
-						.slice(Math.max(0, location.line - 3), location.line + 2)
-						.map((line, index) => `${Math.max(1, location.line - 2) + index}: ${line.trim()}`)
-						.join('\n')
-					: ''
-				error.message = `视图模块 ${key} 转换失败: ${error.message}${sourceHint ? `\n${sourceHint}` : ''}`
-				throw error
-			}
+		const sourceMapRes = new Map()
+		buildCompileView(page, false, scriptRes, new Set(), new Set(), sourceMapRes)
+		const filename = `${page.path.replace(/\//g, '_')}`
+		const outputDir = root
+			? `${getTargetPath()}/${root}`
+			: `${getTargetPath()}/main`
+		if (!fs.existsSync(outputDir)) {
+			fs.mkdirSync(outputDir, { recursive: true })
 		}
 
-		// 单个页面编译完成后清理 scriptRes，释放内存
-		scriptRes.clear()
-
-		const filename = `${page.path.replace(/\//g, '_')}`
-
-		if (root) {
-			const subDir = `${getTargetPath()}/${root}`
-			if (!fs.existsSync(subDir)) {
-				fs.mkdirSync(subDir, { recursive: true })
-			}
-			fs.writeFileSync(`${subDir}/${filename}.js`, mergeRender)
+		if (enableSourcemap) {
+			const compileRes = [...scriptRes.entries()].map(([modulePath, code]) => ({
+				path: modulePath,
+				code,
+				map: sourceMapRes.get(modulePath),
+			}))
+			const sourcemapFileName = `${filename}.js.map`
+			const { bundleCode, sourcemap } = mergeSourcemap(compileRes, `${filename}.js`)
+			fs.writeFileSync(`${outputDir}/${filename}.js`, `${bundleCode}//# sourceMappingURL=${sourcemapFileName}\n`)
+			fs.writeFileSync(`${outputDir}/${sourcemapFileName}`, sourcemap)
 		}
 		else {
-			const mainDir = `${getTargetPath()}/main`
-			if (!fs.existsSync(mainDir)) {
-				fs.mkdirSync(mainDir, { recursive: true })
+			let mergeRender = ''
+			for (const [key, value] of scriptRes.entries()) {
+				const amdFormat = `modDefine('${key}', function(require, module, exports) {
+			${value}
+			});`
+				try {
+					const { code: minifiedCode } = await transform(amdFormat, {
+						minify: true,
+						target: ['es2020'],
+						platform: 'browser',
+					})
+					mergeRender += minifiedCode
+				}
+				catch (error) {
+					const location = error.errors?.[0]?.location
+					const sourceLines = amdFormat.split('\n')
+					const sourceHint = location?.line
+						? sourceLines
+							.slice(Math.max(0, location.line - 3), location.line + 2)
+							.map((line, index) => `${Math.max(1, location.line - 2) + index}: ${line.trim()}`)
+							.join('\n')
+						: ''
+					error.message = `视图模块 ${key} 转换失败: ${error.message}${sourceHint ? `\n${sourceHint}` : ''}`
+					throw error
+				}
 			}
-			fs.writeFileSync(`${mainDir}/${filename}.js`, mergeRender)
+			fs.writeFileSync(`${outputDir}/${filename}.js`, mergeRender)
 		}
+
+		// 单个页面编译完成后清理缓存，释放内存
+		scriptRes.clear()
+		sourceMapRes.clear()
 
 		progress.completedTasks++
 	}
@@ -387,7 +396,7 @@ function isRegisteredWxsModule(modulePath) {
 	return wxsModuleRegistry.has(modulePath)
 }
 
-function buildCompileView(module, isComponent = false, scriptRes, activePaths = new Set(), inheritedTemplatePaths = new Set()) {
+function buildCompileView(module, isComponent = false, scriptRes, activePaths = new Set(), inheritedTemplatePaths = new Set(), sourceMapRes = new Map()) {
 	const currentPath = module.path
 
 	// Recursive component declarations are valid. Stop only the duplicate edge
@@ -403,6 +412,7 @@ function buildCompileView(module, isComponent = false, scriptRes, activePaths = 
 	// 首先编译当前模块
 	const currentInstruction = compileModule(module, isComponent, scriptRes, {
 		skipTemplatePaths: isComponent ? inheritedTemplatePaths : new Set(),
+		sourceMapRes,
 	})
 	if (currentInstruction && currentInstruction.scriptModule) {
 		allScriptModules.push(...currentInstruction.scriptModule)
@@ -424,7 +434,7 @@ function buildCompileView(module, isComponent = false, scriptRes, activePaths = 
 				continue
 			}
 			// 递归编译组件，并收集其 wxs 模块
-			const componentInstruction = buildCompileView(componentModule, true, scriptRes, activePaths, childInheritedTemplatePaths)
+			const componentInstruction = buildCompileView(componentModule, true, scriptRes, activePaths, childInheritedTemplatePaths, sourceMapRes)
 			if (componentInstruction && componentInstruction.scriptModule) {
 				// 将组件的 wxs 模块添加到当前模块的 wxs 模块列表中
 				for (const sm of componentInstruction.scriptModule) {
@@ -447,7 +457,7 @@ function buildCompileView(module, isComponent = false, scriptRes, activePaths = 
 		}
 
 		// 重新编译页面，包含所有收集到的 wxs 模块
-		compileModuleWithAllWxs(module, scriptRes, allScriptModules)
+		compileModuleWithAllWxs(module, scriptRes, allScriptModules, sourceMapRes)
 	}
 
 	activePaths.delete(currentPath)
@@ -462,7 +472,8 @@ function buildCompileView(module, isComponent = false, scriptRes, activePaths = 
  */
 function compileModule(module, isComponent, scriptRes, options = {}) {
 	const skipTemplatePaths = options.skipTemplatePaths || new Set()
-	const { tpl, instruction } = toCompileTemplate(isComponent, module.path, module.usingComponents, module.componentPlaceholder)
+	const sourceMapRes = options.sourceMapRes || new Map()
+	const { tpl, instruction, sourceInfo } = toCompileTemplate(isComponent, module.path, module.usingComponents, module.componentPlaceholder)
 	if (!tpl) {
 		return null
 	}
@@ -499,6 +510,10 @@ function compileModule(module, isComponent, scriptRes, options = {}) {
 
 	if (useCache && cachedCode) {
 		scriptRes.set(module.path, cachedCode)
+		const cachedMap = compileResCache.get(module.path)?.map
+		if (enableSourcemap && cachedMap) {
+			sourceMapRes.set(module.path, cachedMap)
+		}
 
 		// 即使使用缓存，也需要确保返回的 instruction 包含最新的 wxs 模块信息
 		// 收集所有在 scriptRes 中的 wxs 模块（包括依赖模块）
@@ -535,42 +550,51 @@ function compileModule(module, isComponent, scriptRes, options = {}) {
 		filename: module.path, // 用于错误提示
 		id: `data-v-${module.id}`,
 		scoped: true,
+		inMap: enableSourcemap
+			? createLineSourcemap(processedTpl, sourceInfo.path, sourceInfo.content)
+			: undefined,
 		compilerOptions: getTemplateCompilerOptions(`data-v-${module.id}`),
 	})
 
-	let tplComponents = '{'
+	const templateResults = []
 	for (const tm of compileInstruction.templateModule) {
-		let { code } = compileTemplate({
+		const compiledTemplate = compileTemplate({
 			source: tm.tpl,
 			filename: tm.path,
 			id: `data-v-${module.id}`,
 			scoped: true,
+			inMap: enableSourcemap && tm.sourceInfo
+				? createLineSourcemap(tm.tpl, tm.sourceInfo.path, tm.sourceInfo.content, tm.sourceInfo.startLine)
+				: undefined,
 			compilerOptions: getTemplateCompilerOptions(`data-v-${module.id}`),
 		})
-
-		code = insertWxsToRenderCode(code, compileInstruction.scriptModule, scriptRes, tm.path)
-
-		tplComponents
-			+= `'${tm.path}':${code},`
+		templateResults.push({
+			path: tm.path,
+			...insertWxsToRenderResult(compiledTemplate.code, compileInstruction.scriptModule, scriptRes, tm.path, compiledTemplate.map),
+		})
 	}
-	tplComponents += '}'
 
-	const transCode = insertWxsToRenderCode(tplCode.code, compileInstruction.scriptModule, scriptRes, module.path)
+	const renderResult = insertWxsToRenderResult(tplCode.code, compileInstruction.scriptModule, scriptRes, module.path, tplCode.map)
 
 	// 通过 component 字段标记该页面 以 Component 形式进行渲染或着以 Page 形式进行渲染
 	// https://developers.weixin.qq.com/miniprogram/dev/framework/app-service/page.html
 	// https://developers.weixin.qq.com/miniprogram/dev/framework/custom-component/component.html
-	const code = `Module({
+	const moduleChunks = [`Module({
 		path: '${module.path}',
 		id: '${module.id}',
 		appStyleScopeId: ${JSON.stringify(module.appStyleScopeId || null)},
 		sharedStyleScopeIds: ${JSON.stringify(module.sharedStyleScopeIds || [])},
 		styleIsolation: ${JSON.stringify(module.styleIsolation || 'isolated')},
-		render: ${transCode},
+		render: `, renderResult, `,
 		usingComponents: ${JSON.stringify(module.usingComponents)},
+		componentPlaceholder: ${JSON.stringify(module.componentPlaceholder || {})},
 		customTabBar: ${JSON.stringify(module.customTabBar || null)},
-		tplComponents: ${tplComponents},
-		});`
+		tplComponents: {`]
+	for (const templateResult of templateResults) {
+		moduleChunks.push(`'${templateResult.path}':`, templateResult, ',')
+	}
+	moduleChunks.push('},\n\t\t});')
+	const { code, sourcemap: moduleMap } = concatSourcemap(moduleChunks, module.path)
 
 	// 收集所有在 scriptRes 中的 wxs 模块（包括依赖模块）
 	const allWxsModules = collectAllWxsModules(scriptRes, new Set(), compileInstruction.scriptModule || [])
@@ -593,13 +617,17 @@ function compileModule(module, isComponent, scriptRes, options = {}) {
 
 	// 缓存编译结果，包含代码和更新后的指令信息
 	const cacheData = {
-		code: code,
-		instruction: compileInstruction
+		code,
+		instruction: compileInstruction,
+		map: enableSourcemap ? moduleMap : null,
 	}
 	if (canUseCache) {
 		compileResCache.set(module.path, cacheData)
 	}
 	scriptRes.set(module.path, code)
+	if (enableSourcemap) {
+		sourceMapRes.set(module.path, moduleMap)
+	}
 
 	return {
 		...compileInstruction,
@@ -789,8 +817,8 @@ function processWxsDependency(wxsFilePath, moduleName, scriptModule, workPath, f
  * @param {*} scriptRes
  * @param {*} allScriptModules
  */
-function compileModuleWithAllWxs(module, scriptRes, allScriptModules) {
-	const { tpl, instruction } = toCompileTemplate(false, module.path, module.usingComponents, module.componentPlaceholder)
+function compileModuleWithAllWxs(module, scriptRes, allScriptModules, sourceMapRes = new Map()) {
+	const { tpl, instruction, sourceInfo } = toCompileTemplate(false, module.path, module.usingComponents, module.componentPlaceholder)
 	if (!tpl) {
 		return
 	}
@@ -808,47 +836,60 @@ function compileModuleWithAllWxs(module, scriptRes, allScriptModules) {
 		filename: module.path,
 		id: `data-v-${module.id}`,
 		scoped: true,
+		inMap: enableSourcemap
+			? createLineSourcemap(processedTpl, sourceInfo.path, sourceInfo.content)
+			: undefined,
 		compilerOptions: getTemplateCompilerOptions(`data-v-${module.id}`),
 	})
 
-	let tplComponents = '{'
+	const templateResults = []
 	for (const tm of mergedInstruction.templateModule) {
-		let { code } = compileTemplate({
+		const compiledTemplate = compileTemplate({
 			source: tm.tpl,
 			filename: tm.path,
 			id: `data-v-${module.id}`,
 			scoped: true,
+			inMap: enableSourcemap && tm.sourceInfo
+				? createLineSourcemap(tm.tpl, tm.sourceInfo.path, tm.sourceInfo.content, tm.sourceInfo.startLine)
+				: undefined,
 			compilerOptions: getTemplateCompilerOptions(`data-v-${module.id}`),
 		})
-
-		code = insertWxsToRenderCode(code, allScriptModules, scriptRes, tm.path)
-
-		tplComponents
-			+= `'${tm.path}':${code},`
+		templateResults.push({
+			path: tm.path,
+			...insertWxsToRenderResult(compiledTemplate.code, allScriptModules, scriptRes, tm.path, compiledTemplate.map),
+		})
 	}
-	tplComponents += '}'
 
-	const transCode = insertWxsToRenderCode(tplCode.code, allScriptModules, scriptRes, module.path)
+	const renderResult = insertWxsToRenderResult(tplCode.code, allScriptModules, scriptRes, module.path, tplCode.map)
 
-	const code = `Module({
+	const moduleChunks = [`Module({
 		path: '${module.path}',
 		id: '${module.id}',
 		appStyleScopeId: ${JSON.stringify(module.appStyleScopeId || null)},
 		sharedStyleScopeIds: ${JSON.stringify(module.sharedStyleScopeIds || [])},
 		styleIsolation: ${JSON.stringify(module.styleIsolation || 'isolated')},
-		render: ${transCode},
+		render: `, renderResult, `,
 		usingComponents: ${JSON.stringify(module.usingComponents)},
+		componentPlaceholder: ${JSON.stringify(module.componentPlaceholder || {})},
 		customTabBar: ${JSON.stringify(module.customTabBar || null)},
-		tplComponents: ${tplComponents},
-		});`
+		tplComponents: {`]
+	for (const templateResult of templateResults) {
+		moduleChunks.push(`'${templateResult.path}':`, templateResult, ',')
+	}
+	moduleChunks.push('},\n\t\t});')
+	const { code, sourcemap: moduleMap } = concatSourcemap(moduleChunks, module.path)
 
 	// 更新缓存和结果
 	const cacheData = {
-		code: code,
-		instruction: mergedInstruction
+		code,
+		instruction: mergedInstruction,
+		map: enableSourcemap ? moduleMap : null,
 	}
 	compileResCache.set(module.path, cacheData)
 	scriptRes.set(module.path, code)
+	if (enableSourcemap) {
+		sourceMapRes.set(module.path, moduleMap)
+	}
 }
 
 /**
@@ -974,8 +1015,9 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 	const diagnosticSource = fullPath.startsWith(workPath)
 		? fullPath.slice(workPath.length)
 		: path
-	let content = getContentByPath(fullPath).trim()
-	if (!content) {
+	const originalContent = getContentByPath(fullPath)
+	let content = originalContent
+	if (!content.trim()) {
 		// 空文件内容，防止编译出错
 		content = '<block></block>'
 	}
@@ -983,7 +1025,7 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 		checkTemplateCompatibility(content, diagnosticSource, components)
 
 		if (isComponent) {
-			// TODO: 实现 componentPlaceholder，https://developers.weixin.qq.com/miniprogram/dev/framework/custom-component/placeholder.html
+			// componentPlaceholder 作为模块元数据交给渲染层解析；模板仍保留目标组件别名。
 			// 自定义组件统一添加宿主节点，承载组件边界、属性、事件与样式隔离语义。
 			content = `<component-host name="${path}">${content}</component-host>`
 		}
@@ -1012,6 +1054,8 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 		// 减少内存占用的配置
 		lowerCaseTags: false,
 		lowerCaseAttributeNames: false,
+		withStartIndices: true,
+		withEndIndices: true,
 	})
 
 	// 处理 include 节点
@@ -1033,13 +1077,16 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 				includePath = '/' + includePath
 			}
 
-			const includeContent = getContentByPath(includeFullPath).trim()
-			if (includeContent) {
+			const includeContent = getContentByPath(includeFullPath)
+			if (includeContent.trim()) {
 				checkTemplateCompatibility(includeContent, includeDiagnosticSource, components)
 
 				const $includeContent = cheerio.load(includeContent, {
 					xmlMode: true,
 					decodeEntities: false,
+					_useHtmlParser2: true,
+					withStartIndices: true,
+					withEndIndices: true,
 				})
 
 				// 提取其中的 template 节点
@@ -1049,6 +1096,7 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 					includePath,
 					components,
 					componentPlaceholder,
+					{ path: includeDiagnosticSource, content: includeContent },
 				)
 
 				// 提取其中的 wxs 节点
@@ -1079,7 +1127,10 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 
 	// 处理 template 节点
 	// https://developers.weixin.qq.com/miniprogram/dev/reference/wxml/template.html
-	transTagTemplate($, templateModule, sourcePath, components, componentPlaceholder)
+	transTagTemplate($, templateModule, sourcePath, components, componentPlaceholder, {
+		path: diagnosticSource,
+		content: originalContent,
+	})
 
 	// 处理 wxs 节点
 	// https://developers.weixin.qq.com/miniprogram/dev/reference/wxs/01wxs-module.html
@@ -1102,13 +1153,16 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 				importPath = '/' + importPath
 			}
 
-			const importContent = getContentByPath(importFullPath).trim()
-			if (importContent) {
+			const importContent = getContentByPath(importFullPath)
+			if (importContent.trim()) {
 				checkTemplateCompatibility(importContent, importDiagnosticSource, components)
 
 				const $$ = cheerio.load(importContent, {
 					xmlMode: true,
 					decodeEntities: false,
+					_useHtmlParser2: true,
+					withStartIndices: true,
+					withEndIndices: true,
 				})
 				// 提取其中的 template 节点
 				transTagTemplate(
@@ -1117,6 +1171,7 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 					importPath,
 					components,
 					componentPlaceholder,
+					{ path: importDiagnosticSource, content: importContent },
 				)
 
 				// 提取其中的 wxs 节点
@@ -1141,6 +1196,10 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 
 	return {
 		tpl: res.join(''),
+		sourceInfo: {
+			path: diagnosticSource,
+			content: originalContent,
+		},
 		instruction: {
 			templateModule,
 			scriptModule,
@@ -1148,7 +1207,7 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 	}
 }
 
-function transTagTemplate($, templateModule, path, components, componentPlaceholder) {
+function transTagTemplate($, templateModule, path, components, componentPlaceholder, sourceInfo) {
 	const templateNodes = $('template[name]')
 	templateNodes.each((_, elem) => {
 		const name = $(elem).attr('name')
@@ -1164,9 +1223,19 @@ function transTagTemplate($, templateModule, path, components, componentPlacehol
 		templateModule.push({
 			path: `tpl-${name}`,
 			tpl: res.join(''),
+			sourceInfo: sourceInfo
+				? {
+					...sourceInfo,
+					startLine: getSourceLine(sourceInfo.content, elem.children?.[0]?.startIndex ?? elem.startIndex),
+				}
+				: null,
 		})
 	})
 	templateNodes.remove()
+}
+
+function getSourceLine(source, index = 0) {
+	return source.slice(0, Math.max(0, index)).split('\n').length
 }
 
 function transAsses($, imageNodes, path) {
@@ -2137,7 +2206,7 @@ function extractWxsDependencies(moduleCode) {
 	return dependencies
 }
 
-function insertWxsToRenderCode(code, scriptModule, scriptRes, filename = 'render.js') {
+function insertWxsToRenderResult(code, scriptModule, scriptRes, filename = 'render.js', inputMap = null) {
 	const wxsBindings = []
 	const codeReplacements = []
 	const ast = parseJs(code, filename)
@@ -2205,12 +2274,37 @@ function insertWxsToRenderCode(code, scriptModule, scriptRes, filename = 'render
 		},
 	})
 	if (codeReplacements.length === 0) {
-		return getProgramCode(code, ast)
+		return { code: getProgramCode(code, ast), map: inputMap }
 	}
 
 	const transformed = applyCodeReplacements(code, codeReplacements)
+	let map = inputMap
+	if (enableSourcemap) {
+		const generatedMap = new MagicString(code)
+		const selected = []
+		for (const replacement of [...codeReplacements].sort((a, b) => (b.end - b.start) - (a.end - a.start))) {
+			if (!selected.some(item => replacement.start < item.end && item.start < replacement.end)) {
+				selected.push(replacement)
+			}
+		}
+		for (const replacement of selected.sort((a, b) => b.start - a.start)) {
+			if (replacement.type === 'insert') {
+				generatedMap.appendLeft(replacement.start, replacement.value)
+			}
+			else {
+				generatedMap.overwrite(replacement.start, replacement.end, replacement.value)
+			}
+		}
+		const wxsTransformMap = generatedMap.generateMap({
+			file: filename,
+			source: filename,
+			includeContent: true,
+			hires: true,
+		}).toString()
+		map = inputMap ? remapSourcemap(wxsTransformMap, inputMap) : wxsTransformMap
+	}
 	const transformedAst = parseJs(transformed, filename)
-	return getProgramCode(transformed, transformedAst)
+	return { code: getProgramCode(transformed, transformedAst), map }
 }
 
 export {

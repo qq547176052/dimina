@@ -413,6 +413,7 @@ function storeComponentConfig(pageJsonContent, pageFilePath) {
 			component: isComponent,
 			styleIsolation,
 			usingComponents: cComponents,
+			componentPlaceholder: { ...(cContent.componentPlaceholder || {}) },
 		}
 
 		// 只有当配置文件存在时才递归处理
@@ -605,6 +606,7 @@ function getPages() {
 			appStyleScopeId: getAppStyleScopeId(),
 			sharedStyleScopeIds: collectSharedStyleScopeIds(mergedComponents),
 			usingComponents: mergedComponents,
+			componentPlaceholder: { ...(pageInfo[path]?.componentPlaceholder || {}) },
 			customTabBar: pageInfo[path]?.customTabBar,
 		}
 	})
@@ -627,6 +629,7 @@ function getPages() {
 					appStyleScopeId: getAppStyleScopeId(),
 					sharedStyleScopeIds: collectSharedStyleScopeIds(mergedComponents),
 					usingComponents: mergedComponents,
+					componentPlaceholder: { ...(pageInfo[fullPath]?.componentPlaceholder || {}) },
 					customTabBar: pageInfo[fullPath]?.customTabBar,
 				}
 			}),

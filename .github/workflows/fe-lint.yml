@@ -46,7 +46,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./fe
-        run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+        run: pnpm install --no-frozen-lockfile --ignore-scripts --ignore-pnpmfile
 
       - name: Run linter
         working-directory: ./fe

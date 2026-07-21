@@ -127,17 +127,12 @@ export default async function build(targetPath, workPath, useAppIdDir = true, op
 		},
 	)
 
-	try {
-		const context = await tasks.run()
-		printCompatibilityWarnings(workPath, context.compatibilityWarnings)
-		return {
-			appId: getAppId(),
-			name: getAppName(),
-			path: getAppConfigInfo().entryPagePath || context.pages.mainPages[1].path,
-		}
-	}
-	catch (e) {
-		console.error(`${workPath} 编译出错: ${e.message}\n${e.stack}`)
+	const context = await tasks.run()
+	printCompatibilityWarnings(workPath, context.compatibilityWarnings)
+	return {
+		appId: getAppId(),
+		name: getAppName(),
+		path: getAppConfigInfo().entryPagePath || context.pages.mainPages[1].path,
 	}
 }
 
@@ -184,12 +179,18 @@ function runCompileInWorker(script, ctx, task, options = {}) {
 				}
 				else if (message.error) {
 					const error = new Error(message.error.message || message.error)
+					if (message.error.name)
+						error.name = message.error.name
 					if (message.error.stack)
 						error.stack = message.error.stack
 					if (message.error.file)
 						error.file = message.error.file
-					if (message.error.line)
+					if (message.error.line != null)
 						error.line = message.error.line
+					if (message.error.column != null)
+						error.column = message.error.column
+					if (message.error.stage)
+						error.stage = message.error.stage
 					handleError(error)
 				}
 			}

@@ -147,7 +147,7 @@ public class DMPPageController: UIViewController {
             view.bringSubviewToFront(customNavigationCapsuleView)
         }
         if let miniProgramMenuContainerView = miniProgramMenuContainerView {
-            view.bringSubviewToFront(miniProgramMenuContainerView)
+            miniProgramMenuContainerView.superview?.bringSubviewToFront(miniProgramMenuContainerView)
         }
         loadingView?.superview?.bringSubviewToFront(loadingView!)
     }
@@ -663,14 +663,19 @@ public class DMPPageController: UIViewController {
         topDivider.translatesAutoresizingMaskIntoConstraints = false
         topDivider.backgroundColor = UIColor(red: 242 / 255, green: 242 / 255, blue: 242 / 255, alpha: 1)
 
+        let iconColor = UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
+        let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 24, weight: .medium)
+
         let reenterItem = makeMiniProgramMenuItem(
             title: "重新进入\n小程序",
-            image: makeMenuReenterImage(),
+            image: UIImage(systemName: "arrow.clockwise", withConfiguration: symbolConfiguration)?
+                .withTintColor(iconColor, renderingMode: .alwaysOriginal) ?? UIImage(),
             action: #selector(miniProgramMenuReenterTapped)
         )
         let closeItem = makeMiniProgramMenuItem(
             title: "关闭小程序",
-            image: makeMenuCloseImage(),
+            image: UIImage(systemName: "xmark", withConfiguration: symbolConfiguration)?
+                .withTintColor(iconColor, renderingMode: .alwaysOriginal) ?? UIImage(),
             action: #selector(miniProgramMenuCloseTapped)
         )
 
@@ -691,7 +696,10 @@ public class DMPPageController: UIViewController {
         cancelButton.titleLabel?.font = .systemFont(ofSize: 18)
         cancelButton.addTarget(self, action: #selector(dismissMiniProgramMenu), for: .touchUpInside)
 
-        view.addSubview(overlay)
+        guard let presentationView = navigationController?.view ?? parent?.view ?? view else {
+            return
+        }
+        presentationView.addSubview(overlay)
         overlay.addSubview(sheetView)
         sheetView.addSubview(headerView)
         sheetView.addSubview(topDivider)
@@ -699,12 +707,12 @@ public class DMPPageController: UIViewController {
         sheetView.addSubview(bottomDivider)
         sheetView.addSubview(cancelButton)
 
-        let bottomInset = view.safeAreaInsets.bottom
+        let bottomInset = presentationView.safeAreaInsets.bottom
         NSLayoutConstraint.activate([
-            overlay.topAnchor.constraint(equalTo: view.topAnchor),
-            overlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            overlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            overlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            overlay.topAnchor.constraint(equalTo: presentationView.topAnchor),
+            overlay.leadingAnchor.constraint(equalTo: presentationView.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: presentationView.trailingAnchor),
+            overlay.bottomAnchor.constraint(equalTo: presentationView.bottomAnchor),
 
             sheetView.leadingAnchor.constraint(equalTo: overlay.leadingAnchor),
             sheetView.trailingAnchor.constraint(equalTo: overlay.trailingAnchor),
@@ -747,7 +755,7 @@ public class DMPPageController: UIViewController {
         ])
 
         miniProgramMenuContainerView = overlay
-        view.bringSubviewToFront(overlay)
+        presentationView.bringSubviewToFront(overlay)
     }
 
     private func makeMiniProgramMenuItem(title: String, image: UIImage, action: Selector) -> UIControl {
@@ -797,46 +805,6 @@ public class DMPPageController: UIViewController {
         ])
 
         return control
-    }
-
-    private func makeMenuReenterImage() -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 24, height: 24))
-        return renderer.image { _ in
-            let color = UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
-            let text = "↻" as NSString
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 24, weight: .medium),
-                .foregroundColor: color
-            ]
-            let textSize = text.size(withAttributes: attributes)
-            text.draw(
-                at: CGPoint(
-                    x: (24 - textSize.width) / 2,
-                    y: (24 - textSize.height) / 2
-                ),
-                withAttributes: attributes
-            )
-        }.withRenderingMode(.alwaysOriginal)
-    }
-
-    private func makeMenuCloseImage() -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 24, height: 24))
-        return renderer.image { _ in
-            let color = UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
-            let text = "×" as NSString
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 26, weight: .medium),
-                .foregroundColor: color
-            ]
-            let textSize = text.size(withAttributes: attributes)
-            text.draw(
-                at: CGPoint(
-                    x: (24 - textSize.width) / 2,
-                    y: (24 - textSize.height) / 2
-                ),
-                withAttributes: attributes
-            )
-        }.withRenderingMode(.alwaysOriginal)
     }
 
     @objc private func dismissMiniProgramMenu() {

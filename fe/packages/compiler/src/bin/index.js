@@ -20,7 +20,12 @@ program
 		const useAppIdDir = options.appIdDir !== false
 		const sourcemap = !!options.sourcemap
 
-		await build(targetPath, workPath, useAppIdDir, { sourcemap })
+		try {
+			await build(targetPath, workPath, useAppIdDir, { sourcemap })
+		}
+		catch (error) {
+			throw new Error(`${workPath} 编译出错: ${error.message}`, { cause: error })
+		}
 		const watch = options.watch
 		if (watch) {
 			chokidar
@@ -31,7 +36,12 @@ program
 				.on('all', async (event, path) => {
 					if (event === 'change') {
 						console.log(`${path} 改动，重新编译`)
-						await build(targetPath, workPath, useAppIdDir, { sourcemap })
+						try {
+							await build(targetPath, workPath, useAppIdDir, { sourcemap })
+						}
+						catch (error) {
+							console.error(`${workPath} 编译出错: ${error.message}`)
+						}
 					}
 				})
 		}
@@ -41,4 +51,7 @@ program
 	.name('dmcc')
 	.version(pack.version)
 
-program.parse(process.argv)
+program.parseAsync(process.argv).catch((error) => {
+	console.error(error.stack || error.message)
+	process.exitCode = 1
+})

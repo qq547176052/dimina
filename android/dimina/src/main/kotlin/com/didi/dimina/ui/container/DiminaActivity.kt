@@ -48,6 +48,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -72,8 +74,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -1629,18 +1633,18 @@ class DiminaActivity : ComponentActivity() {
                 ) {
                     MiniProgramMenuItem(
                         label = "重新进入\n小程序",
+                        icon = Icons.Filled.Refresh,
+                        contentDescription = "重新进入小程序",
                         onClick = onReenterClick,
                         modifier = Modifier.width(78.dp)
-                    ) {
-                        ReenterMenuIcon()
-                    }
+                    )
                     MiniProgramMenuItem(
                         label = "关闭小程序",
+                        icon = Icons.Filled.Close,
+                        contentDescription = "关闭小程序",
                         onClick = onCloseClick,
                         modifier = Modifier.width(78.dp)
-                    ) {
-                        CloseMenuIcon()
-                    }
+                    )
                 }
 
                 HorizontalDivider(color = Color(0xFFEDEDED), thickness = 1.dp)
@@ -1661,9 +1665,10 @@ class DiminaActivity : ComponentActivity() {
     @Composable
     private fun MiniProgramMenuItem(
         label: String,
+        icon: ImageVector,
+        contentDescription: String,
         onClick: () -> Unit,
-        modifier: Modifier = Modifier,
-        icon: @Composable () -> Unit
+        modifier: Modifier = Modifier
     ) {
         Column(
             modifier = modifier.clickable(onClick = onClick),
@@ -1676,7 +1681,12 @@ class DiminaActivity : ComponentActivity() {
                     .background(Color(0xFFF8F8F8)),
                 contentAlignment = Alignment.Center
             ) {
-                icon()
+                Icon(
+                    imageVector = icon,
+                    contentDescription = contentDescription,
+                    tint = Color(0xFF333333),
+                    modifier = Modifier.size(24.dp)
+                )
             }
             Text(
                 text = label,
@@ -1687,30 +1697,6 @@ class DiminaActivity : ComponentActivity() {
                 modifier = Modifier.padding(top = 8.dp)
             )
         }
-    }
-
-    @Composable
-    private fun ReenterMenuIcon() {
-        Text(
-            text = "↻",
-            fontSize = 24.sp,
-            lineHeight = 24.sp,
-            color = Color(0xFF333333),
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-    }
-
-    @Composable
-    private fun CloseMenuIcon() {
-        Text(
-            text = "×",
-            fontSize = 24.sp,
-            lineHeight = 24.sp,
-            color = Color(0xFF333333),
-            fontWeight = FontWeight.Normal,
-            textAlign = TextAlign.Center
-        )
     }
 
     @Composable
