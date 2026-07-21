@@ -1,0 +1,15 @@
+<view class="home">
+  <view class="home-hd">
+    <image class="home-logo" src="../../common/resources/kindComp/logo.png"></image>
+    <view class="home-title">admin_app</view>
+    <view class="home-version">v{{ appVersion }}</view>
+  </view>
+  <view class="home-bd">
+    <block wx:for-items="{{entries}}" wx:key="{{item.id}}">
+      <view class="home-card" data-url="{{item.url}}" bindtap="goPage">
+        <view class="home-card-name">{{item.name}}</view>
+        <view class="home-card-desc">{{item.desc}}</view>
+      </view>
+    </block>
+  </view>
+</view>

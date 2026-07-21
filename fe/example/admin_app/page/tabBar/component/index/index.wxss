@@ -1,1 +1,19 @@
 /* page/tabBar/component/index/index.wxss */
+/* 简介: 组件首页样式, 仅标题, 顶部预留 1/15 屏高给刘海 */
+/* 履历: 2026-07-21 由空页面填充样式 */
+/* 履历: 2026-07-21 增加页面导航按钮样式 */
+/* 履历: 2026-07-21 增加带参跳转按钮(描边变体)样式 */
+/* 履历: 2026-07-21 顶部/底部留白适配刘海与安全区(viewport-fit=cover) */
+/* 履历: 2026-07-21 精简为仅标题, 顶部预留 1/15 屏高留白, 移除按钮/卡片等无用样式 */
+.page {
+  height: 100vh;
+  box-sizing: border-box;
+  padding: calc(env(safe-area-inset-top) + 100vh / 15) 24rpx calc(24rpx + env(safe-area-inset-bottom));
+  background: #f5f6f8;
+}
+
+.title {
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #1a1a1a;
+}

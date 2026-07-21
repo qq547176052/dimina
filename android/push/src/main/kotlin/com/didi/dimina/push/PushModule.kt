@@ -131,7 +131,7 @@ https://www.lddgo.net/convert/imagebasesix
   "miniProgram": {
     "appId": "wxd58cedf6d1e1c52c",
     "name":  "可选 名称",
-    "path":  "page/tabBar/component/max_image"
+    "path":  "page/tabBar/component/max_image/max_image"
   },
   "close":   "false"
 }

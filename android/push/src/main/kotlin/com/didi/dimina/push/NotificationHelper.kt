@@ -12,6 +12,7 @@ import android.util.Base64
 import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
+import com.didi.dimina.Dimina
 import com.didi.dimina.bean.MiniProgram
 import com.didi.dimina.common.LogUtils
 import com.didi.dimina.ui.container.DiminaActivity
@@ -32,6 +33,7 @@ import org.json.JSONObject
  * 履历: 2026-07-18 新增 custom_thumb 模式(收起缩略图/展开大图)
  * 履历: 2026-07-18 新增 close 选项, 点击仅关闭横幅不跳转 app(优先级高于 url/小程序)
  * 履历: 2026-07-20 新增 miniProgram 字段, 点击打开指定小程序并把原始 JSON 作为启动参数(query.payload)传入
+ * 履历: 2026-07-21 落地页 root 动态判定: 跳转 path 命中小程序首页则 root=true(回后台), 否则 root=false(可回退到首页)
  */
 object NotificationHelper {
     /** 渠道版本, 调整通知行为后自增以强制重建渠道(渠道创建后不可变) */
@@ -283,11 +285,15 @@ object NotificationHelper {
                 LogUtils.e("NotificationHelper", "miniProgram.appId is empty, skip")
                 return null
             }
+            // 跳转 path 命中小程序首页(config.json 的 path)则作为根页启动, 否则作为二级页(可回退回首页)
+            val targetPath = obj.optString("path", null)
+            val homePath = Dimina.getInstance().getMiniProgram(appId)?.path
+            val isRoot = normalizePath(targetPath) == normalizePath(homePath)
             MiniProgram(
                 appId = appId,
                 name = obj.optString("name", ""),
-                root = true,
-                path = buildPathWithPayload(obj.optString("path", null), raw),
+                root = isRoot,
+                path = buildPathWithPayload(targetPath, raw),
                 versionCode = obj.optInt("versionCode", 0),
                 versionName = obj.optString("versionName", ""),
                 updateManifestUrl = obj.optString("updateManifestUrl", ""),
@@ -297,6 +303,10 @@ object NotificationHelper {
             null
         }
     }
+
+    /** 规范化页面路径: 去掉前导 '/' 与 query, 便于与首页 path 做等值比较 */
+    private fun normalizePath(path: String?): String =
+        path?.substringBefore('?')?.trim('/') ?: ""
 
     /** 将原始 JSON 作为 query.payload 附加到小程序 path, 供 onLaunch options.query.payload 获取 */
     private fun buildPathWithPayload(basePath: String?, raw: String?): String? {

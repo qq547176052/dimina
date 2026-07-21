@@ -1,2 +1,34 @@
 <!--page/tabBar/component/max_image/max_image.wxml-->
-<text>page/tabBar/component/max_image/max_image.wxml</text>
+<!--简介: 推送落地页视图, 按推送字段展示: 标题/内容/全景图/人脸图-->
+<!--履历: 2026-07-21 创建, 通用参数列表+原始数据展示-->
+<!--履历: 2026-07-21 按推送字段重构界面, 仅保留 标题/内容/全景图/人脸图, 移除返回按钮与调试区-->
+<!--履历: 2026-07-21 排序调整为 标题/内容/人脸图/全景图, 整体底部对齐, 顶部留 1/15 屏高外边距-->
+<!--履历: 2026-07-21 内容超出一屏时默认滚动到底部(scroll-into-view), 内层 flex 底部对齐避免顶部被裁-->
+<scroll-view class="page" scroll-y scroll-into-view="{{scrollIntoView}}" wx:if="{{received}}">
+  <view class="inner">
+    <view class="card head">
+      <text class="title">{{title}}</text>
+      <text class="content">{{content}}</text>
+    </view>
+
+    <view class="card" wx:if="{{faceImage}}">
+      <view class="label">人脸图</view>
+      <image class="face" src="{{faceImage}}" mode="aspectFill"></image>
+    </view>
+
+    <view class="card" id="maxBottom">
+      <view class="label">全景图</view>
+      <image
+        class="pano"
+        src="{{panoImage}}"
+        mode="widthFix"
+        show-menu-by-longpress
+        binderror="onImageError"
+      ></image>
+    </view>
+  </view>
+</scroll-view>
+
+<view class="empty" wx:else>
+  <text>未接收到推送参数</text>
+</view>

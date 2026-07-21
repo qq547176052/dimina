@@ -1,66 +1,65 @@
 // page/tabBar/component/max_image/max_image.js
+// 简介: 推送落地页. 通知被点击后跳转至此, 接收 query.payload(原始推送 JSON),
+//       按推送字段结构化展示: 标题/内容/全景图/人脸图.
+// 履历:
+//   2026-07-21 创建, onLoad 解码 payload 展示大图与全部参数
+//   2026-07-21 修复: URLEncoder 把空格编码为 '+', decodeURIComponent 不会还原,
+//             需先 '+'->' ' 再解码, 否则 JSON.parse 失败导致参数/图片全空
+//   2026-07-21 按推送字段重构界面, 仅展示 标题/内容/全景图/人脸图, 移除返回按钮与调试区
 Page({
-
-  /**
-   * 页面的初始数据
-   */
   data: {
-
+    received: false,   // 是否成功解析到 payload
+    title: '',         // 标题
+    content: '',       // 内容
+    panoImage: '',     // 全景图(payload.max_image)
+    faceImage: '',     // 人脸图(payload.image)
+    fallbackImage: '', // 回退图(base64, 离线可用)
+    imgError: false,   // 全景图是否加载失败
+    scrollIntoView: '', // 默认滚动到底部的锚点 id
   },
 
-  /**
-   * 生命周期函数--监听页面加载
-   */
   onLoad(options) {
-
+    const payload = this.parsePayload(options && options.payload)
+    if (!payload) {
+      this.setData({ received: false })
+      return
+    }
+    this.setData({
+      received: true,
+      title: payload.title || '',
+      content: payload.content || '',
+      panoImage: payload.max_image || '',
+      faceImage: typeof payload.image === 'string' ? payload.image : '',
+      fallbackImage: typeof payload.image === 'string' ? payload.image : '',
+      imgError: false,
+    })
   },
 
-  /**
-   * 生命周期函数--监听页面初次渲染完成
-   */
+  // 渲染完成后默认滚动到底部(全景图), 长内容也能停在底部且可向上回滚
   onReady() {
-
+    this.setData({ scrollIntoView: 'maxBottom' })
   },
 
-  /**
-   * 生命周期函数--监听页面显示
-   */
-  onShow() {
-
+  // 全景图加载失败: 回退到 base64 人脸图(离线可用)
+  onImageError() {
+    if (this.data.fallbackImage && !this.data.imgError) {
+      this.setData({ panoImage: this.data.fallbackImage, imgError: true })
+    }
   },
 
-  /**
-   * 生命周期函数--监听页面隐藏
-   */
-  onHide() {
-
+  // 解析 payload: 框架不自动解码; URLEncoder 把空格编为 '+', 需先转回空格再解码
+  parsePayload(raw) {
+    if (!raw) return null
+    let text = raw
+    try {
+      text = decodeURIComponent(raw.replace(/\+/g, ' '))
+    } catch (e) {
+      text = raw
+    }
+    try {
+      return JSON.parse(text)
+    } catch (e) {
+      return null
+    }
   },
-
-  /**
-   * 生命周期函数--监听页面卸载
-   */
-  onUnload() {
-
-  },
-
-  /**
-   * 页面相关事件处理函数--监听用户下拉动作
-   */
-  onPullDownRefresh() {
-
-  },
-
-  /**
-   * 页面上拉触底事件的处理函数
-   */
-  onReachBottom() {
-
-  },
-
-  /**
-   * 用户点击右上角分享
-   */
-  onShareAppMessage() {
-
-  }
 })

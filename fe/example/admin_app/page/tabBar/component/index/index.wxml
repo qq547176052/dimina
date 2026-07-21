@@ -1,2 +1,9 @@
 <!--page/tabBar/component/index/index.wxml-->
-<text>page/tabBar/component/index/index.wxml</text>
+<!--简介: 组件 Tab 首页视图, 仅保留标题, 顶部预留 1/15 屏高给刘海-->
+<!--履历: 2026-07-21 由空页面填充为基础组件展示页-->
+<!--履历: 2026-07-21 增加跳转 max_image 按钮-->
+<!--履历: 2026-07-21 增加带推送参数跳转按钮-->
+<!--履历: 2026-07-21 精简为仅保留标题, 顶部预留 1/15 屏高留白给刘海-->
+<scroll-view class="page" scroll-y>
+  <text class="title">接收通知</text>
+</scroll-view>
