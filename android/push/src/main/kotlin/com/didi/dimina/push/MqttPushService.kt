@@ -68,6 +68,8 @@ class MqttPushService : Service() {
             val content = json.optString("content", json.optString("body", ""))
             val data = mutableMapOf<String, String>()
             json.keys().forEach { key -> json.opt(key)?.let { data[key] = it.toString() } }
+            // 保留原始 JSON, 供点击打开小程序时作为启动参数(query.payload)传入
+            data["raw"] = raw
             Triple(title, content, data)
         } catch (e: Exception) {
             LogUtils.e(tag, "payload not json, treat as plain text: ${e.message}")

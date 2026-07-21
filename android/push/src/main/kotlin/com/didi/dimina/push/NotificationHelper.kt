@@ -19,6 +19,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.net.URL
+import java.net.URLEncoder
+import org.json.JSONObject
 
 /**
  * 通知展示助手, 复用系统 NotificationManager
@@ -29,6 +31,7 @@ import java.net.URL
  * 履历: 2026-07-18 bigpicture 收起态回退标准图标+文字(横幅有图标), 仅下拉展开显示大图
  * 履历: 2026-07-18 新增 custom_thumb 模式(收起缩略图/展开大图)
  * 履历: 2026-07-18 新增 close 选项, 点击仅关闭横幅不跳转 app(优先级高于 url/小程序)
+ * 履历: 2026-07-20 新增 miniProgram 字段, 点击打开指定小程序并把原始 JSON 作为启动参数(query.payload)传入
  */
 object NotificationHelper {
     /** 渠道版本, 调整通知行为后自增以强制重建渠道(渠道创建后不可变) */
@@ -254,7 +257,7 @@ object NotificationHelper {
         return rv
     }
 
-    /** 点击意图优先级: url > 小程序 > 启动 App */
+    /** 点击意图优先级: url > 小程序(payload 指定) > 当前小程序 > 启动 App (close 由调用方处理) */
     private fun buildIntent(context: Context, miniProgram: MiniProgram?, data: Map<String, String>): Intent? {
         val url = data["url"]
         if (!url.isNullOrEmpty()) {
@@ -262,8 +265,49 @@ object NotificationHelper {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
         }
+        // payload 指定要打开的小程序, 并把原始 JSON 作为启动参数(query.payload)传入
+        val mpJson = data["miniProgram"]
+        if (!mpJson.isNullOrEmpty()) {
+            parseMiniProgram(mpJson, data["raw"])?.let { return buildDiminaIntent(context, it) }
+        }
         if (miniProgram != null) return buildDiminaIntent(context, miniProgram)
         return context.packageManager.getLaunchIntentForPackage(context.packageName)
+    }
+
+    /** 解析 payload 中的 miniProgram 对象, 并把原始 JSON 作为 query.payload 附加到 path */
+    private fun parseMiniProgram(mpJson: String, raw: String?): MiniProgram? {
+        return try {
+            val obj = JSONObject(mpJson)
+            val appId = obj.optString("appId")
+            if (appId.isEmpty()) {
+                LogUtils.e("NotificationHelper", "miniProgram.appId is empty, skip")
+                return null
+            }
+            MiniProgram(
+                appId = appId,
+                name = obj.optString("name", ""),
+                root = true,
+                path = buildPathWithPayload(obj.optString("path", null), raw),
+                versionCode = obj.optInt("versionCode", 0),
+                versionName = obj.optString("versionName", ""),
+                updateManifestUrl = obj.optString("updateManifestUrl", ""),
+            )
+        } catch (e: Exception) {
+            LogUtils.e("NotificationHelper", "parse miniProgram failed: ${e.message}")
+            null
+        }
+    }
+
+    /** 将原始 JSON 作为 query.payload 附加到小程序 path, 供 onLaunch options.query.payload 获取 */
+    private fun buildPathWithPayload(basePath: String?, raw: String?): String? {
+        if (basePath.isNullOrEmpty() || raw.isNullOrEmpty()) return basePath
+        val encoded = try {
+            URLEncoder.encode(raw, "UTF-8")
+        } catch (e: Exception) {
+            LogUtils.e("NotificationHelper", "encode payload failed: ${e.message}")
+            return basePath
+        }
+        return if (basePath.contains("?")) "$basePath&payload=$encoded" else "$basePath?payload=$encoded"
     }
 
     /** 构造启动小程序的 Intent, 复用官方 DiminaActivity 的 MINI_PROGRAM_KEY */

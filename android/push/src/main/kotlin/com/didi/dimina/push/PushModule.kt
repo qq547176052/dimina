@@ -127,7 +127,12 @@ https://www.lddgo.net/convert/imagebasesix
   "image":   "https://...png",  // 可选 图片URL 或 data:image base64, 带图通知
                              //   base64 内嵌不依赖网络下载, 适合内网/证书不可达场景
   "style":   "custom",        // 可选 图片展示方式: custom(默认, 自定义UI 收起即显示图) / custom_big(自定义UI 仅展开显示图, 需下拉) / bigpicture(系统大图样式)
-  "url":     "https://...",     // 可选 点击跳转网页, 优先级 url > 小程序 > app
+  "url":     "https://...",     // 可选 点击跳转网页
+  "miniProgram": {              // 可选 点击打开指定小程序(优先级 url > miniProgram > 当前小程序 > app)
+    "appId": "wxpushjpg0001",  //   小程序 appId (必填, 见 miniapp/pushjpg 示例: 接收通知并展示图片)
+    "name":  "示例小程序",       //   可选 名称
+    "path":  "pages/index/index" //   可选 入口页, 原始 JSON 作为启动参数经 query.payload 传入
+  },
   "close":   "true"             // 可选 点击仅关闭横幅不跳转 app(优先级最高, 默认 false)
 }
 
@@ -136,6 +141,8 @@ https://www.lddgo.net/convert/imagebasesix
 2. 小程序侧: wx.mqttPublish({ topic, payload, qos }), payload 同上 JSON 字符串。
 3. 宿主主动: NotificationHelper.showNotification(context, title, content,
    miniProgram, data) 直接弹通知, miniProgram 非空时点击跳转对应小程序。
+4. 打开小程序并传参: payload 含 miniProgram 字段时, 点击打开该小程序,
+   原始 JSON 经 path 的 query.payload 传入, 小程序侧通过 onLaunch(options.query.payload) 获取。
 示例 (MQTTX 往 dimina/push 发布):
    topic  : dimina/push
    payload: {"title":"新版本发布","content":"Dimina 2.0 已上线","level":"high",
