@@ -6,15 +6,24 @@
 //   2026-07-21 增加带推送参数跳转按钮
 //   2026-07-21 精简为仅保留标题, 移除按钮与示例数据
 //   2026-07-22 改为展示宿主小程序列表(经 wx.extBridge AppList.getList), 点击经 AppList.launch 拉起
+//   2026-07-22 页面底板展示当前小程序版本号(经 wx.getSystemInfoSync 取 appVersion)
 Page({
   data: {
     keywords: '',
     list: [],        // 全量列表(来自宿主)
     displayList: [], // 过滤后展示列表
+    version: '',     // 当前小程序版本名(取自 wx.getSystemInfoSync.appVersion)
   },
 
   onLoad() {
     const that = this
+    // 取当前小程序版本号(宿主 SystemApi 在 getSystemInfoSync 中注入 appVersion)
+    try {
+      const sys = (typeof wx.getSystemInfoSync === 'function') ? wx.getSystemInfoSync() : {}
+      that.setData({ version: sys.appVersion || '' })
+    } catch (e) {
+      console.error('[index] getSystemInfoSync fail:', e)
+    }
     wx.extBridge({
       module: 'AppList',
       event: 'getList',

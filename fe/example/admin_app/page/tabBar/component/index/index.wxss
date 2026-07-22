@@ -1,11 +1,28 @@
 /* page/tabBar/component/index/index.wxss */
 /* 简介: 组件 Tab 首页样式, 小程序列表(仿宿主 MainActivity) */
 /* 履历: 2026-07-22 新增小程序列表样式, 参考宿主 MainActivity */
-.page {
+/* 履历: 2026-07-22 页面改为 flex 列布局, 底部新增版本号 footer */
+.page-wrap {
   height: 100vh;
   box-sizing: border-box;
-  padding: calc(env(safe-area-inset-top) + 32rpx) 24rpx calc(24rpx + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
   background: #F5F5F5;
+}
+
+.page {
+  flex: 1;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: calc(env(safe-area-inset-top) + 32rpx) 24rpx 24rpx;
+}
+
+.footer {
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 24rpx;
+  color: #999;
+  padding: 16rpx 0 calc(16rpx + env(safe-area-inset-bottom));
 }
 
 .header {
