@@ -147,7 +147,7 @@ fun MiniProgramListScreen(modifier: Modifier = Modifier) {
                 color = primaryTextColor
             )
         }
-
+        
         // Search bar
         SearchBar(
             query = searchQuery,
@@ -157,7 +157,7 @@ fun MiniProgramListScreen(modifier: Modifier = Modifier) {
                 .fillMaxWidth()
                 .padding(16.dp)
         )
-
+        
         // App list title
         Text(
             text = "应用列表",
@@ -167,7 +167,7 @@ fun MiniProgramListScreen(modifier: Modifier = Modifier) {
             color = secondaryTextColor,
             fontWeight = FontWeight.Medium
         )
-
+        
         // Mini-program list
         MiniProgramList(
             miniPrograms = filteredMiniPrograms,
@@ -190,7 +190,7 @@ fun SearchBar(
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
-
+    
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -298,9 +298,9 @@ fun MiniProgramItem(
                 fontWeight = FontWeight.Bold
             )
         }
-
+        
         Spacer(modifier = Modifier.width(16.dp))
-
+        
         // Mini-program name
         Text(
             text = miniProgram.name,
@@ -324,14 +324,14 @@ fun Context.getMiniProgramsList(): List<MiniProgram> {
         }?:emptyList()
 
         val miniPrograms = mutableListOf<MiniProgram>()
-
+        
         // Convert to MiniProgram objects with consistent colors based on name
         for (jsonObject in configResults) {
             if (jsonObject == null) {
                 continue
             }
             val name = jsonObject.getString("name")
-
+            
             miniPrograms.add(MiniProgram(
                 appId =  jsonObject.getString("appId"),
                 name = name,
@@ -341,7 +341,7 @@ fun Context.getMiniProgramsList(): List<MiniProgram> {
                 updateManifestUrl = jsonObject.optString("updateManifestUrl", ""),
             ))
         }
-
+        
         return miniPrograms
     } catch (e: Exception) {
         Log.e("MainActivity", "Error reading config.json: ${e.message}")

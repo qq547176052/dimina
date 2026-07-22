@@ -26,6 +26,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "Dimina Android"
 include(":app")
+//include(":app_js")
 include(":engine_qjs")
 include(":dimina")
 include(":push")

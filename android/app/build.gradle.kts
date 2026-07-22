@@ -41,19 +41,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    packaging {
-        resources {
-            // HiveMQ 传递依赖 Netty, 排除其 META-INF 资源避免合并冲突
-            excludes += "/META-INF/INDEX.LIST"
-            excludes += "/META-INF/*.kotlin_module"
-            excludes += "/META-INF/*.version"
-            excludes += "/META-INF/*.properties"
-            excludes += "/META-INF/LICENSE*"
-            excludes += "/META-INF/NOTICE*"
-            excludes += "/META-INF/DEPENDENCIES"
-            excludes += "/META-INF/ASL2.0"
-        }
-    }
     buildFeatures {
         compose = true
     }
@@ -61,7 +48,6 @@ android {
 
 dependencies {
     implementation(project(":dimina"))
-    implementation(project(":push"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

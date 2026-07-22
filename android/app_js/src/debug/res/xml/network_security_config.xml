@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Debug 环境: 全局允许 HTTP 明文通信 -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <!-- 信任系统证书 -->
+            <certificates src="system" />
+            <!-- 信任用户安装的证书(用于抓包调试) -->
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
