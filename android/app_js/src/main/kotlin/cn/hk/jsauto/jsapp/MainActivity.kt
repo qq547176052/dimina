@@ -1,319 +1,125 @@
 package cn.hk.jsauto.jsapp
 
 import android.app.Activity
+import android.app.Application
 import android.content.Context
 import android.os.Bundle
 import android.util.Log
-import androidx.activity.SystemBarStyle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.core.view.WindowInsetsControllerCompat
 import com.didi.dimina.Dimina
 import com.didi.dimina.bean.MiniProgram
-import com.didi.dimina.common.Utils
-import com.didi.dimina.ui.theme.DiminaAndroidTheme
+import com.didi.dimina.common.LogUtils
+import com.didi.dimina.push.requestNotificationPermission
+import org.json.JSONArray
 import org.json.JSONObject
 
-val bgColor = Color(0xFFF5F5F5)
-private val primaryTextColor = Color(0xFF1F2329)
-private val secondaryTextColor = Color(0xFF4E5969)
-private val tertiaryTextColor = Color(0xFF86909C)
-
-
 /**
- * Author: Doslin
+ * 启动页: 作为 LAUNCHER, 进入即拉起默认小程序, 并注册 AppList 扩展模块。
+ * 复刻 app 模块的成功路径——默认小程序经 startMiniProgram 拉起, 使 JsCore 引擎在
+ * DiminaActivity 之前(前台 Activity 阶段)创建, 修复发布版首冷启动白屏(二次才成功)的问题。
+ * AppList 扩展模块由小程序首页(index.js)经 wx.extBridge 调用, 用于获取列表并拉起对应小程序。
+ * 履历:
+ *   2026-07-22 新增(由 SplashActivity 重命名), 替代 DiminaActivity 直接作为 LAUNCHER 的冷启动白屏问题
+ *   2026-07-22 AppList 扩展模块与前台 Activity 跟踪由 App.kt 迁入本类, 默认小程序名称置为 " "
+ *   2026-07-22 改用 ComponentActivity 基类, 在拉起默认小程序前先申请 POST_NOTIFICATIONS 权限
  */
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        private const val TAG = "DemoApp"
+    }
+
+    // 前台 Activity, 供 AppList 扩展模块拉起(其他)小程序
+    private var currentActivity: Activity? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val systemBarColor = bgColor.toArgb()
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.light(systemBarColor, systemBarColor),
-            navigationBarStyle = SystemBarStyle.light(systemBarColor, systemBarColor)
-        )
+        registerActivityLifecycle()
+        registerAppListModule()
+        // 先申请通知权限(Android 13+ 为运行时权限), 结果回调后再拉起默认小程序并 finish,
+        // 避免权限对话框因 Activity 过早 finish 而失效
+        requestNotificationPermission { launchDefaultMiniProgram() }
+    }
 
-        // Set the status bar color to bgColor
-        @Suppress("DEPRECATION")
-        window.statusBarColor = bgColor.toArgb() // Convert Compose Color to ARGB int
-        WindowInsetsControllerCompat(window, window.decorView).apply {
-            isAppearanceLightStatusBars = true
-            isAppearanceLightNavigationBars = true
+    // 拉起默认小程序(名称置为 " ")后结束启动页
+    private fun launchDefaultMiniProgram() {
+        val miniProgram = Dimina.getInstance().getMiniProgram(AppConfig.DEFAULT_APP_ID)
+        if (miniProgram == null) {
+            LogUtils.e(TAG, "启动失败: 默认小程序 appId=${AppConfig.DEFAULT_APP_ID} 未读取到配置")
+            finish()
+            return
         }
+        LogUtils.i(
+            TAG,
+            "启动默认小程序: appId=${miniProgram.appId}, name=${miniProgram.name}, " +
+                "path=${miniProgram.path}, version=${miniProgram.versionName}",
+        )
+        // 经 startMiniProgram(openApp) 拉起, 引擎在此阶段创建, 与 app 模块点击进入一致
+        // 名称置为 " ", 支持后期修改只读字段 name
+        Dimina.getInstance().startMiniProgram(this, miniProgram.copy(name = " "))
+        finish()
+    }
 
-        setContent {
-            DiminaAndroidTheme(darkTheme = false, dynamicColor = false) {
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    containerColor = bgColor
-                ) { innerPadding ->
-                    MiniProgramListScreen(
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+    // 跟踪前台 Activity, 供 AppList 扩展模块拉起(其他)小程序使用
+    // 注: registerActivityLifecycleCallbacks 属 Application, 故经 application 调用
+    private fun registerActivityLifecycle() {
+        application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityCreated(a: Activity, s: Bundle?) { currentActivity = a }
+            override fun onActivityStarted(a: Activity) { currentActivity = a }
+            override fun onActivityResumed(a: Activity) { currentActivity = a }
+            override fun onActivityPaused(a: Activity) {}
+            override fun onActivityStopped(a: Activity) {}
+            override fun onActivitySaveInstanceState(a: Activity, o: Bundle) {}
+            override fun onActivityDestroyed(a: Activity) {
+                if (currentActivity == a) currentActivity = null
             }
-        }
+        })
     }
-}
 
-@Composable
-fun MiniProgramListScreen(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    var searchQuery by remember { mutableStateOf("") }
-    val allMiniPrograms = remember { context.getMiniProgramsList() }
-    val filteredMiniPrograms = remember(searchQuery, allMiniPrograms) {
-        if (searchQuery.isEmpty()) {
-            allMiniPrograms
-        } else {
-            allMiniPrograms.filter { it.name.contains(searchQuery, ignoreCase = true) }
-        }
-    }
-    val focusManager = LocalFocusManager.current
-
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .clickable(
-                onClick = {
-                    focusManager.clearFocus()
-                },
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            )
-            .background(bgColor)
-
-    ) {
-        // Header
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(bgColor)
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "星河小程序",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = primaryTextColor
-            )
-        }
-
-        // Search bar
-        SearchBar(
-            query = searchQuery,
-            onQueryChange = { searchQuery = it },
-            onSearch = { /* Additional search action if needed */ },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        )
-
-        // App list title
-        Text(
-            text = "应用列表",
-            modifier = Modifier
-                .padding(start = 16.dp, bottom = 8.dp),
-            fontSize = 16.sp,
-            color = secondaryTextColor,
-            fontWeight = FontWeight.Medium
-        )
-
-        // Mini-program list
-        MiniProgramList(
-            miniPrograms = filteredMiniPrograms,
-            onMiniProgramClick = { miniProgram ->
-                // Handle mini-program click
-                if (context is Activity) {
-                    Dimina.getInstance().startMiniProgram(context, miniProgram)
-                }
-            }
-        )
-    }
-}
-
-@Composable
-fun SearchBar(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onSearch: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val focusRequester = remember { FocusRequester() }
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(46.dp)
-            .background(Color.White, shape = MaterialTheme.shapes.medium)
-            .padding(horizontal = 16.dp),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = "Search",
-                tint = tertiaryTextColor
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                textStyle = TextStyle(
-                    fontSize = 14.sp,
-                    color = primaryTextColor
-                ),
-                cursorBrush = SolidColor(primaryTextColor),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = {
-                    onSearch(query)
-                    keyboardController?.hide()
-                }),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester),
-                decorationBox = { innerTextField ->
-                    Box(contentAlignment = Alignment.CenterStart) {
-                        if (query.isEmpty()) {
-                            Text(
-                                text = "搜索小程序",
-                                fontSize = 14.sp,
-                                color = tertiaryTextColor
-                            )
-                        }
-                        innerTextField()
+    // 注册 AppList 扩展模块: 小程序首页(index.js)经 wx.extBridge 获取列表并拉起对应小程序
+    private fun registerAppListModule() {
+        Dimina.getInstance().registerExtModule("AppList") { event, data, callback ->
+            when (event) {
+                "getList" -> {
+                    val arr = JSONArray()
+                    for (mp in getMiniProgramsList()) {
+                        if (mp.appId in AppConfig.EXCLUDED_LIST_APP_IDS) continue // 排除清单内的小程序
+                        arr.put(JSONObject().apply {
+                            put("appId", mp.appId)
+                            put("name", mp.name)
+                            put("path", mp.path ?: "")
+                            put("versionName", mp.versionName)
+                        })
                     }
+                    callback.onSuccess(JSONObject().apply { put("list", arr) })
+                    null
                 }
-            )
-        }
-    }
-}
-
-@Composable
-fun MiniProgramList(
-    miniPrograms: List<MiniProgram>,
-    onMiniProgramClick: (MiniProgram) -> Unit
-) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.White)
-    ) {
-        itemsIndexed(miniPrograms) { index, miniProgram ->
-            MiniProgramItem(
-                miniProgram = miniProgram,
-                onClick = { onMiniProgramClick(miniProgram) }
-            )
-            // 仅在不是最后一项时添加分割线
-            if (index < miniPrograms.size - 1) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 72.dp),
-                    color = Color(0xFFEEEEEE),
-                    thickness = 1.dp
-                )
+                "launch" -> {
+                    val appId = data.optString("appId")
+                    val mp = Dimina.getInstance().getMiniProgram(appId)
+                    if (mp != null && currentActivity != null) {
+                        Dimina.getInstance().startMiniProgram(currentActivity!!, mp)
+                        callback.onSuccess(JSONObject())
+                    } else {
+                        callback.onFail(JSONObject().apply {
+                            put("errMsg", "launch fail: appId=$appId not found or no activity")
+                        })
+                    }
+                    null
+                }
+                else -> {
+                    callback.onFail(JSONObject().apply { put("errMsg", "unknown event: $event") })
+                    null
+                }
             }
         }
     }
 }
 
-@Composable
-fun MiniProgramItem(
-    miniProgram: MiniProgram,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Icon with circle background
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(Color(Utils.generateColorFromName(miniProgram.name))),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = miniProgram.name.substring(0, 1),
-                color = Color.White,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        Spacer(modifier = Modifier.width(16.dp))
-
-        // Mini-program name
-        Text(
-            text = miniProgram.name,
-            fontSize = 16.sp,
-            color = primaryTextColor
-        )
-    }
-}
-
-// Read mini programs from assets and generate consistent colors based on name
+// 从 assets/jsapp 各小程序 config.json 读取小程序列表
 fun Context.getMiniProgramsList(): List<MiniProgram> {
-    try {
-        // Read JSON file from assets
+    return try {
+        // 从资源中读取JSON文件
         val configResults = assets.list("jsapp")?.map { folder ->
             try {
                 val jsonString = assets.open("jsapp/$folder/config.json").bufferedReader().use { it.readText() }
@@ -321,11 +127,11 @@ fun Context.getMiniProgramsList(): List<MiniProgram> {
             } catch (_: Exception) {
                 null
             }
-        }?:emptyList()
+        } ?: emptyList()
 
         val miniPrograms = mutableListOf<MiniProgram>()
 
-        // Convert to MiniProgram objects with consistent colors based on name
+        // 转换为MiniProgram对象
         for (jsonObject in configResults) {
             if (jsonObject == null) {
                 continue
@@ -333,7 +139,7 @@ fun Context.getMiniProgramsList(): List<MiniProgram> {
             val name = jsonObject.getString("name")
 
             miniPrograms.add(MiniProgram(
-                appId =  jsonObject.getString("appId"),
+                appId = jsonObject.getString("appId"),
                 name = name,
                 versionCode = jsonObject.getInt("versionCode"),
                 versionName = jsonObject.getString("versionName"),
@@ -342,18 +148,10 @@ fun Context.getMiniProgramsList(): List<MiniProgram> {
             ))
         }
 
-        return miniPrograms
+        miniPrograms
     } catch (e: Exception) {
         Log.e("MainActivity", "Error reading config.json: ${e.message}")
-        // Return empty list if file reading fails
-        return emptyList()
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun MiniProgramListPreview() {
-    DiminaAndroidTheme {
-        MiniProgramListScreen()
+        // 如果文件读取失败，则返回空列表
+        emptyList()
     }
 }

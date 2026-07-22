@@ -2,35 +2,19 @@ package com.didi.dimina.push
 
 import android.content.Context
 import android.content.Intent
-import android.provider.Settings
-import android.util.Log
 import com.didi.dimina.bean.MiniProgram
 import com.didi.dimina.core.MiniApp
 
 /**
- * MQTT 推送模块入口, 宿主一行调用启用
+ * MQTT 推送模块入口, 宿主传入 PushConfig 启用
  * 履历:
  *   2026-07-17 创建, 初始化推送配置/注册 API/启动前台服务
  *   2026-07-18 新增 initDefault 默认初始化, 内聚 broker 等默认配置, 宿主一行接入
+ *   2026-07-22 默认配置外移至宿主 config/AppConfig, 移除 initDefault 与内置默认常量, 改由宿主传入 PushConfig
  */
 object PushModule {
     private var config: PushConfig? = null
     private var currentMiniProgram: MiniProgram? = null
-
-    /** 使用默认配置初始化推送模块, clientId 由设备 ANDROID_ID 生成保证唯一 */
-    fun initDefault(context: Context) {
-        val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-        val config = PushConfig(
-            broker = DEFAULT_BROKER,
-            clientId = "${DEFAULT_CLIENT_PREFIX}$deviceId",
-            username = DEFAULT_USERNAME,
-            password = DEFAULT_PASSWORD,
-            useSsl = false,
-            topics = DEFAULT_TOPICS,
-        )
-        Log.d("PushModule", "mqtt id: ${config.clientId}")
-        init(context, config)
-    }
 
     fun init(context: Context, config: PushConfig) {
         this.config = config
@@ -51,16 +35,6 @@ object PushModule {
     }
 
     const val NOTIFICATION_CHANNEL_ID = "dimina_push"
-
-    // ---- 默认配置, 按实际环境替换 ----
-    /** MQTT broker 地址, 如 "ssl://host:8883" 或 "tcp://host:1883" */
-    private const val DEFAULT_BROKER = "tcp://mqtt.jsauto.hk.cn:1883"
-    /** clientId 前缀, 与设备标识拼接保证唯一 */
-    private const val DEFAULT_CLIENT_PREFIX = "dimina_demo_"
-    private val DEFAULT_USERNAME: String? = null
-    private val DEFAULT_PASSWORD: String? = null
-    /** 启动后自动订阅的主题, 按实际业务替换 */
-    private val DEFAULT_TOPICS = listOf("dimina/push")
 }
 
 /*

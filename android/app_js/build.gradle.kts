@@ -57,6 +57,12 @@ android {
     buildFeatures {
         compose = true
     }
+    // 统一配置目录: 将 ../config 纳入 Kotlin 编译, 集中管理默认小程序与推送配置
+    sourceSets {
+        getByName("main") {
+            kotlin.srcDir("../config")
+        }
+    }
 }
 
 dependencies {
