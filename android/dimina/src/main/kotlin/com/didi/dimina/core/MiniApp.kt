@@ -33,6 +33,7 @@ import com.didi.dimina.api.ui.ScrollApi
 import com.didi.dimina.api.ui.TabBarApi
 import com.didi.dimina.bean.MiniProgram
 import com.didi.dimina.common.ApiUtils
+import com.didi.dimina.common.BundledResourcePolicy
 import com.didi.dimina.common.LogUtils
 import com.didi.dimina.common.Utils
 import com.didi.dimina.common.VersionUtils
@@ -115,37 +116,44 @@ class MiniApp private constructor() {
                     if (initialized) {
                         context?.let {
                             try {
-                                // 判断是否需要检测 JSSDK 的逻辑：调试模式或者 App 版本已更新
-                                if (Dimina.getInstance().isDebugMode() || VersionUtils.isAppVersionUpdated(context)) {
-                                    LogUtils.d(tag, "Checking for JSSDK updates...")
-                                    val jsConfigString =
-                                        context.assets.open("jssdk/config.json").bufferedReader()
-                                            .use { it.readText() }
-                                    val sdkObject = JSONObject(jsConfigString)
-                                    val newVersionCode = sdkObject.getInt("versionCode")
-                                    val versionName = sdkObject.getString("versionName")
-                                    val oldVersionCode = VersionUtils.getJSVersion()
-                                    if (newVersionCode > oldVersionCode) {
-                                        LogUtils.d(tag, "JSSDK update found: $versionName($newVersionCode)")
-                                        if (Utils.unzipAssets(
-                                                context,
-                                                "jssdk/main.zip",
-                                                "jssdk/$newVersionCode",
-                                            )
-                                        ) {
-                                            VersionUtils.setJSVersion(newVersionCode)
-                                            LogUtils.d(tag, "JSSDK updated successfully to version $versionName($newVersionCode)")
-                                        } else {
-                                            LogUtils.e(
-                                                tag,
-                                                "Failed to extract JSSDK: $versionName($newVersionCode)"
-                                            )
-                                        }
+                                // JSSDK has its own version and readiness state. Do not gate it on
+                                // the host-app update marker: that marker is shared with jsapp and
+                                // reading it mutates the value seen by the next resource initializer.
+                                val jsConfigString =
+                                    context.assets.open("jssdk/config.json").bufferedReader()
+                                        .use { it.readText() }
+                                val sdkObject = JSONObject(jsConfigString)
+                                val newVersionCode = sdkObject.getInt("versionCode")
+                                val versionName = sdkObject.getString("versionName")
+                                val oldVersionCode = VersionUtils.getJSVersion()
+                                val activeServiceFile = File(
+                                    context.filesDir,
+                                    "jssdk/$oldVersionCode/main/assets/service.js"
+                                )
+                                val shouldExtract = BundledResourcePolicy.shouldExtract(
+                                    bundledVersion = newVersionCode,
+                                    installedVersion = oldVersionCode,
+                                    requiredResourcePresent = activeServiceFile.isFile,
+                                )
+
+                                if (shouldExtract) {
+                                    LogUtils.d(tag, "Extracting bundled JSSDK: $versionName($newVersionCode)")
+                                    if (Utils.unzipAssets(
+                                            context,
+                                            "jssdk/main.zip",
+                                            "jssdk/$newVersionCode",
+                                        )
+                                    ) {
+                                        VersionUtils.setJSVersion(newVersionCode)
+                                        LogUtils.d(tag, "JSSDK updated successfully to version $versionName($newVersionCode)")
                                     } else {
-                                        LogUtils.d(tag, "JSSDK is already up to date: $versionName($newVersionCode)")
+                                        LogUtils.e(
+                                            tag,
+                                            "Failed to extract JSSDK: $versionName($newVersionCode)"
+                                        )
                                     }
                                 } else {
-                                    LogUtils.d(tag, "Skipping JSSDK update check, last check was recent")
+                                    LogUtils.d(tag, "JSSDK is already available: version=$oldVersionCode")
                                 }
                                 // Inject custom API namespaces before loading service.js
                                 val namespaces = Dimina.getInstance().getApiNamespaces()

@@ -104,6 +104,7 @@ import com.didi.dimina.bean.MiniProgram
 import com.didi.dimina.bean.PathInfo
 import com.didi.dimina.bean.TabBarConfig
 import com.didi.dimina.bean.TabBarItem
+import com.didi.dimina.common.BundledResourcePolicy
 import com.didi.dimina.common.LogUtils
 import com.didi.dimina.common.MenuButtonLayout
 import com.didi.dimina.common.PathUtils
@@ -516,28 +517,17 @@ class DiminaActivity : ComponentActivity() {
             // 1.解压小程序资源包 jsApp
             val appId = miniProgram.appId
             try {
-                // 判断是否需要更新小程序包的逻辑：
-                // 1. 是小程序首页入口
-                // 2. 如果是调试模式，只要版本号大于本地版本就解压
-                // 3. 如果是发布模式，需要应用版本已升级且小程序版本号大于本地版本才解压
+                // jsapp uses its own version and extracted-file readiness. The host-app
+                // update marker is shared with JSSDK and is therefore not a safe gate.
                 val shouldExtract = if (miniProgram.root) {
                     val localVersion = VersionUtils.getAppVersion(appId)
-                    val isDebugMode = Dimina.getInstance().isDebugMode()
-                    val appVersionUpdated = VersionUtils.isAppVersionUpdated(this@DiminaActivity)
-                    
-                    when {
-                        isDebugMode -> {
-                            // 调试模式：版本号大于本地版本就解压
-                            miniProgram.versionCode > localVersion
-                        }
-                        appVersionUpdated -> {
-                            // 发布模式且应用版本已升级：版本号大于本地版本才解压
-                            miniProgram.versionCode > localVersion
-                        }
-                        else -> false
-                    }
+                    BundledResourcePolicy.shouldExtract(
+                        bundledVersion = miniProgram.versionCode,
+                        installedVersion = localVersion,
+                        requiredResourcePresent = findAppConfigFile("jsapp/$appId") != null,
+                    )
                 } else false
-                // 使用上面的shouldExtract变量来决定是否解压
+
                 if (shouldExtract) {
                     if (Utils.unzipAssets(this@DiminaActivity, "jsapp/$appId/$appId.zip", "jsapp/$appId")) {
                         VersionUtils.setAppVersion(appId, miniProgram.versionCode)
@@ -1140,19 +1130,13 @@ class DiminaActivity : ComponentActivity() {
      */
     private fun readAppConfig(target: String, root: String = "main"): AppConfig? {
         try {
-            // Check both possible locations for app-config.json
             val miniProgramDir = File(filesDir, target)
-            var configFile = File(miniProgramDir, "${root}/app-config.json")
-
-            // If not found in main/app-config.json, try app-config.json directly
-            if (!configFile.exists()) {
-                configFile = File(miniProgramDir, "app-config.json")
-                if (!configFile.exists()) {
-                    // Log the directory structure to help debug
-                    LogUtils.e(tag, "app-config.json not found in the package")
-                    logDirectoryStructure(miniProgramDir)
-                    return null
-                }
+            val configFile = findAppConfigFile(target, root)
+            if (configFile == null) {
+                // Log the directory structure to help debug
+                LogUtils.e(tag, "app-config.json not found in the package")
+                logDirectoryStructure(miniProgramDir)
+                return null
             }
 
             // Parse the JSON file
@@ -1169,6 +1153,14 @@ class DiminaActivity : ComponentActivity() {
             e.printStackTrace()
             return null
         }
+    }
+
+    private fun findAppConfigFile(target: String, root: String = "main"): File? {
+        val miniProgramDir = File(filesDir, target)
+        return listOf(
+            File(miniProgramDir, "$root/app-config.json"),
+            File(miniProgramDir, "app-config.json"),
+        ).firstOrNull(File::isFile)
     }
 
     /**
