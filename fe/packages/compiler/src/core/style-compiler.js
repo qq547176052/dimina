@@ -9,8 +9,8 @@ import less from 'less'
 import postcss from 'postcss'
 import selectorParser from 'postcss-selector-parser'
 import * as sass from 'sass'
-import { collectAssets, tagWhiteList, transformRpx } from '../common/utils.js'
-import { getAppId, getComponent, getContentByPath, getStyleExts, getTargetPath, getWorkPath, resetStoreInfo } from '../env.js'
+import { collectAssets, resolveAssetSourcePath, tagWhiteList, transformRpx } from '../common/utils.js'
+import { getAppId, getComponent, getContentByPath, getDependencyGraph, getStyleExts, getTargetPath, getWorkPath, resetStoreInfo } from '../env.js'
 import { concatSourcemap, createLineSourcemap, remapSourcemap } from './sourcemap.js'
 
 const compileRes = new Map()
@@ -41,7 +41,10 @@ if (!isMainThread) {
 			// Worker 任务完成后清理缓存，释放内存
 			compileRes.clear()
 
-			parentPort.postMessage({ success: true })
+			parentPort.postMessage({
+				success: true,
+				dependencyGraph: getDependencyGraph().toJSON(),
+			})
 		}
 		catch (error) {
 			// 错误时也清理缓存
@@ -114,7 +117,10 @@ async function buildCompileCss(module, compiledPaths = new Set(), options = {}) 
 
 		// Preserve the original depth-first, declaration-order traversal while
 		// using an explicit stack instead of the JavaScript call stack.
-		const componentPaths = Object.values(currentModule.usingComponents || {})
+		const graphDependencies = getDependencyGraph().getDirectDependencies(currentPath, 'component')
+		const componentPaths = graphDependencies.length > 0
+			? graphDependencies
+			: Object.values(currentModule.usingComponents || {})
 		for (let index = componentPaths.length - 1; index >= 0; index--) {
 			const componentModule = getComponent(componentPaths[index])
 			if (componentModule) {
@@ -260,7 +266,11 @@ function createStyleTransformPlugin(module, absolutePath, importResults, options
 			const importPath = node.params.replace(/^['"]|['"]$/g, '')
 			const importFullPath = resolveStyleImportPath(absolutePath, importPath)
 			node.remove()
-			importResults.push(buildCompileCss({ absolutePath: importFullPath, id: module.id }, new Set(), options))
+			importResults.push(buildCompileCss({
+				absolutePath: importFullPath,
+				id: module.id,
+				ownerPath: module.ownerPath || module.path,
+			}, new Set(), options))
 		},
 		Rule(rule) {
 			if (processedRules.has(rule)) {
@@ -293,7 +303,11 @@ function createStyleTransformPlugin(module, absolutePath, importResults, options
 			comment.remove()
 		},
 		Declaration(declaration) {
-			declaration.value = normalizeCssUrlValue(declaration.value, absolutePath)
+			declaration.value = normalizeCssUrlValue(
+				declaration.value,
+				absolutePath,
+				module.ownerPath || module.path,
+			)
 			declaration.value = transformRpx(declaration.value)
 		},
 	}
@@ -304,6 +318,10 @@ async function enhanceCSS(module, options = {}) {
 	if (!absolutePath) {
 		// 样式文件不存在
 		return { code: '', map: null }
+	}
+	const graphOwnerPath = module.ownerPath || module.path
+	if (graphOwnerPath) {
+		getDependencyGraph().addFile(graphOwnerPath, absolutePath, 'style')
 	}
 	const cacheKey = `${absolutePath}::${module.id || ''}::${options.sourcemap ? 'map' : 'plain'}`
 
@@ -445,7 +463,7 @@ async function enhanceCSS(module, options = {}) {
 	return result
 }
 
-function normalizeCssUrlValue(value, absolutePath) {
+function normalizeCssUrlValue(value, absolutePath, graphOwnerPath) {
 	return value.replace(/url\(([^)]+)\)/g, (fullMatch, rawUrl) => {
 		const cleanedUrl = rawUrl.trim().replace(/^['"]|['"]$/g, '')
 
@@ -461,6 +479,13 @@ function normalizeCssUrlValue(value, absolutePath) {
 			return fullMatch
 		}
 
+		if (graphOwnerPath && /\.(?:png|jpe?g|gif|svg)(?:\?.*)?$/.test(cleanedUrl)) {
+			getDependencyGraph().addFile(
+				graphOwnerPath,
+				resolveAssetSourcePath(getWorkPath(), absolutePath, cleanedUrl),
+				'style',
+			)
+		}
 		const realSrc = collectAssets(getWorkPath(), absolutePath, cleanedUrl, getTargetPath(), getAppId())
 		return `url(${realSrc})`
 	})

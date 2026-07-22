@@ -43,12 +43,20 @@ public class DMPApp {
             isLaunching = false
         }
 
+        await prepareRuntimeForLaunch(initializeContainer: true)
+
+        await openPage(launchConfig: launchConfig)
+    }
+
+    @MainActor
+    private func prepareRuntimeForLaunch(initializeContainer: Bool) async {
         await Self.prepareBundleResources(appId: appId)
 
-        initContainer()
+        if initializeContainer {
+            initContainer()
+        }
 
         await initService()
-
         await loadBundle()
 
         if let manifestUrl = appConfig?.updateManifestUrl,
@@ -61,8 +69,6 @@ public class DMPApp {
         }
 
         initRender()
-        
-        await openPage(launchConfig: launchConfig)
     }
 
     public func initService() async {
@@ -172,20 +178,66 @@ public class DMPApp {
     public func openPage(launchConfig: DMPLaunchConfig) async {
         DMPLogger.debug("openPage")
         var newLaunchConfig = launchConfig
-        newLaunchConfig.appEntryPath = self.bundleAppConfig?.entryPagePath ?? ""
+        // 尊重调用方指定的启动页（扫码/分享等场景从内页启动，此时导航栏按
+        // 微信规则显示返回首页按钮）；未指定时回退到应用首页
+        // 路径入口经 DMPUtil.normalizePagePath 统一去前导斜杠，与
+        // DMPBundleAppConfig.entryPagePath 及页面栈 key 同口径
+        let requestedEntry = launchConfig.appEntryPath?.trimmingCharacters(in: .whitespaces) ?? ""
+        let normalizedEntry = DMPUtil.normalizePagePath(requestedEntry)
+        newLaunchConfig.appEntryPath = normalizedEntry.isEmpty
+            ? (self.bundleAppConfig?.entryPagePath ?? "")
+            : normalizedEntry
         currentLaunchConfig = newLaunchConfig
         await navigator?.launch(to: newLaunchConfig.appEntryPath ?? "", query: newLaunchConfig.query)
     }
 
     @MainActor
     public func applyUpdate() async {
-        let launchConfig = currentLaunchConfig
-        service?.destroy()
-        await initService()
-        await loadBundle()
+        var launchConfig = currentLaunchConfig ?? DMPLaunchConfig()
+        launchConfig.isRelaunch = true
+        await restart(launchConfig: launchConfig)
+    }
 
-        let entryPath = launchConfig?.appEntryPath ?? bundleAppConfig?.entryPagePath ?? ""
-        await navigator?.relaunch(to: entryPath, query: launchConfig?.query, animated: false)
+    /// Cold-reload the current mini program from its configured entry page.
+    /// Persistent storage is intentionally retained; service, page, render,
+    /// bridge-resource, and transient API state are recreated.
+    @MainActor
+    public func reEnter() async {
+        let entryPath = bundleAppConfig?.entryPagePath ?? currentLaunchConfig?.appEntryPath ?? ""
+        let launchConfig = DMPLaunchConfig(
+            appEntryPath: entryPath,
+            query: nil,
+            isRelaunch: true
+        )
+        await restart(launchConfig: launchConfig)
+    }
+
+    @MainActor
+    private func restart(launchConfig: DMPLaunchConfig) async {
+        guard !isLaunching, !isDestroyed else {
+            DMPLogger.debug("restart skipped: app is launching or destroyed")
+            return
+        }
+
+        isLaunching = true
+        defer {
+            isLaunching = false
+        }
+
+        await navigator?.reloadMiniProgram(animated: false) {
+            BluetoothAPIManager.shared.clearApp(self.appId)
+            LocalNetworkAPIManager.shared.clearApp(self.appId)
+            self.container?.resetForReload()
+
+            self.service?.destroy()
+            self.service = nil
+            self.render = nil
+            self.bundleAppConfig = nil
+            self.currentLaunchConfig = nil
+
+            await self.prepareRuntimeForLaunch(initializeContainer: false)
+            return launchConfig
+        }
     }
 
     /// 注册第三方扩展 bridge 模块。

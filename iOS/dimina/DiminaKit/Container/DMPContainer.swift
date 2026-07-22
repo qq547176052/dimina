@@ -54,6 +54,14 @@ public class DMPContainer {
         isNavigating = false
     }
 
+    /// Clear state owned by the current mini-program runtime while keeping
+    /// host-registered extension modules available for the next launch.
+    func resetForReload() {
+        clearExtSubscriptions()
+        loadStatusMap.removeAll()
+        isNavigating = false
+    }
+
     // MARK: - Resource Management
     func hasLoadResource(webViewId: Int, type: ResourceLoadType) {
         let status = loadStatusMap[webViewId] ?? .initial

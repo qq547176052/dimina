@@ -2,6 +2,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import build from '../index.js'
+import {
+	COMPILE_CACHE_VERSION,
+	createAppCacheEntry,
+	createCachedAppBuildPlan,
+} from '../common/compile-cache.js'
 
 const CACHE_FILE = path.resolve('./packages/container/public/compile-cache.json')
 const COMPILER_SRC_DIR = path.resolve('./packages/compiler/src')
@@ -9,13 +14,19 @@ const COMPILER_SRC_DIR = path.resolve('./packages/compiler/src')
 function loadCache() {
 	if (fs.existsSync(CACHE_FILE)) {
 		try {
-			return JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'))
+			const cache = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'))
+			return {
+				...cache,
+				version: cache.version || 0,
+				apps: cache.apps && typeof cache.apps === 'object' ? cache.apps : {},
+				compilerLastModified: cache.compilerLastModified || 0,
+			}
 		}
 		catch {
-			return { apps: {}, compilerLastModified: 0 }
+			return { version: 0, apps: {}, compilerLastModified: 0 }
 		}
 	}
-	return { apps: {}, compilerLastModified: 0 }
+	return { version: 0, apps: {}, compilerLastModified: 0 }
 }
 
 function saveCache(cache) {
@@ -132,7 +143,9 @@ async function buildMiniApp(options = {}) {
 	const cache = loadCache()
 
 	// 检查编译器是否被修改
-	const compilerModified = force || isCompilerModified(cache.compilerLastModified)
+	const compilerModified = force
+		|| cache.version !== COMPILE_CACHE_VERSION
+		|| isCompilerModified(cache.compilerLastModified)
 
 	const files = await fs.promises.readdir(currentDirectory)
 	const directories = files.filter(file => {
@@ -147,23 +160,27 @@ async function buildMiniApp(options = {}) {
 		const workPath = path.resolve(`./example/${fileName}`)
 		const targetPath = path.resolve(workPath, '../../packages/container/public')
 
-		const lastCompileTime = cache.apps[fileName]?.lastCompileTime || 0
+		const cacheEntry = cache.apps[fileName]
+		const publishedPath = cacheEntry?.appInfo?.appId
+			? path.join(targetPath, cacheEntry.appInfo.appId)
+			: null
+		const plan = compilerModified || !publishedPath
+			? { mode: 'full', options: {} }
+			: createCachedAppBuildPlan({ cacheEntry, workPath, publishedPath })
 
-		// 检查是否需要重新编译
-		if (force || compilerModified || isModified(workPath, lastCompileTime)) {
-			const appInfo = await build(targetPath, workPath)
-			appList.push(appInfo)
-			// 更新这个应用的最后编译时间
-			cache.apps[fileName] = {
-				lastCompileTime: Date.now(),
-				appInfo,
-			}
+		if (plan.mode === 'skip') {
+			cacheEntry.fileFingerprints = plan.fileFingerprints
+			appList.push(cacheEntry.appInfo)
 		}
 		else {
-			// 如果没有修改，使用缓存中的appInfo
-			if (cache.apps[fileName]?.appInfo) {
-				appList.push(cache.apps[fileName].appInfo)
-			}
+			const buildResult = await build(targetPath, workPath, true, plan.options)
+			const nextCacheEntry = createAppCacheEntry(
+				buildResult,
+				workPath,
+				cacheEntry?.fileFingerprints,
+			)
+			cache.apps[fileName] = nextCacheEntry
+			appList.push(nextCacheEntry.appInfo)
 		}
 	}
 
@@ -190,6 +207,7 @@ async function buildMiniApp(options = {}) {
 	}
 
 	// 更新编译器的最后修改时间
+	cache.version = COMPILE_CACHE_VERSION
 	cache.compilerLastModified = Date.now()
 
 	// 保存更新后的缓存

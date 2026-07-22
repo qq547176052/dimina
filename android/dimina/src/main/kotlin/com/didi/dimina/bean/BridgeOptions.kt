@@ -22,6 +22,8 @@ data class MergedPageConfig(
     val navigationStyle: String,
     val capsuleStyle: String,
     val canClose: Boolean,
+    // 页面配置 homeButton: true 强制显示导航栏返回首页按钮（微信 page.json homeButton 字段）
+    val homeButton: Boolean,
     val usingComponents: Map<String, String>
 )
 

@@ -31,6 +31,7 @@ data class WindowConfig(
     val navigationStyle: String? = null,
     val capsuleStyle: String? = null,
     val canClose: Boolean? = null,
+    val homeButton: Boolean? = null,
 )
 
 @Serializable
@@ -75,5 +76,6 @@ data class PageModule(
     val navigationStyle: String? = null,
     val capsuleStyle: String? = null,
     val canClose: Boolean? = null,
+    val homeButton: Boolean? = null,
     val usingComponents: Map<String, String>? = null
 )

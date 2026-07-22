@@ -27,6 +27,11 @@ public class DMPNavigator: NSObject {
     // 页面记录
     private var pageRecords: [DMPPageRecord] = []
     private weak var tabBarContainerController: DMPTabBarContainerController?
+    // 胶囊属于小程序容器，而不是某个页面。固定挂在 UINavigationController.view
+    // 上可避免 push/pop 时新旧页面各携带一份胶囊参与转场。
+    private var capsuleView: UIView?
+    private weak var capsuleMoreButton: UIButton?
+    private weak var capsuleCloseButton: UIButton?
 
     // 公开初始化方法
     public init(app: DMPApp? = nil) {
@@ -35,6 +40,8 @@ public class DMPNavigator: NSObject {
     }
 
     public func setup(navigationController: UINavigationController) {
+        capsuleView?.removeFromSuperview()
+        capsuleView = nil
         self.navigationController = navigationController
 
         objc_setAssociatedObject(
@@ -43,10 +50,165 @@ public class DMPNavigator: NSObject {
 
         // 禁用系统返回手势
         navigationController.interactivePopGestureRecognizer?.isEnabled = false
+        installCapsule(in: navigationController)
+    }
+
+    func setCapsuleVisible(_ visible: Bool) {
+        capsuleView?.isHidden = !visible
+        if visible {
+            setCapsuleEnabled(true)
+        }
+    }
+
+    func setCapsuleEnabled(_ enabled: Bool) {
+        capsuleMoreButton?.isEnabled = enabled
+        capsuleCloseButton?.isEnabled = enabled
+    }
+
+    func bringCapsuleToFront() {
+        guard let capsuleView, !capsuleView.isHidden else { return }
+        capsuleView.superview?.bringSubviewToFront(capsuleView)
+    }
+
+    private func installCapsule(in navigationController: UINavigationController) {
+        let capsuleView = UIView()
+        capsuleView.translatesAutoresizingMaskIntoConstraints = false
+        capsuleView.accessibilityIdentifier = "dimina.navigation.capsule"
+        capsuleView.backgroundColor = .white
+        capsuleView.layer.cornerRadius = DMPMenuButtonLayout.capsuleSize.height / 2
+        capsuleView.layer.borderWidth = 0.5
+        capsuleView.layer.borderColor = UIColor(
+            red: 229 / 255, green: 229 / 255, blue: 229 / 255, alpha: 1
+        ).cgColor
+        capsuleView.layer.shadowColor = UIColor.black.cgColor
+        capsuleView.layer.shadowOpacity = 0.08
+        capsuleView.layer.shadowRadius = 2
+        capsuleView.layer.shadowOffset = CGSize(width: 0, height: 1)
+        capsuleView.isHidden = true
+
+        let moreButton = UIButton(type: .custom)
+        moreButton.translatesAutoresizingMaskIntoConstraints = false
+        moreButton.contentHorizontalAlignment = .center
+        moreButton.contentVerticalAlignment = .center
+        moreButton.setImage(makeCapsuleMoreImage(), for: .normal)
+        moreButton.accessibilityLabel = "More"
+        moreButton.addTarget(self, action: #selector(capsuleMoreButtonTapped), for: .touchUpInside)
+
+        let closeButton = UIButton(type: .custom)
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+        closeButton.contentHorizontalAlignment = .center
+        closeButton.contentVerticalAlignment = .center
+        closeButton.setImage(makeCapsuleCloseImage(), for: .normal)
+        closeButton.accessibilityLabel = "Close"
+        closeButton.addTarget(self, action: #selector(capsuleCloseButtonTapped), for: .touchUpInside)
+
+        let separatorView = UIView()
+        separatorView.translatesAutoresizingMaskIntoConstraints = false
+        separatorView.backgroundColor = UIColor(
+            red: 233 / 255, green: 233 / 255, blue: 233 / 255, alpha: 1
+        )
+
+        capsuleView.addSubview(moreButton)
+        capsuleView.addSubview(separatorView)
+        capsuleView.addSubview(closeButton)
+        navigationController.view.addSubview(capsuleView)
+
+        let verticalInset = (DMPMenuButtonLayout.navigationBarContentHeight
+            - DMPMenuButtonLayout.capsuleSize.height) / 2
+        NSLayoutConstraint.activate([
+            capsuleView.topAnchor.constraint(
+                equalTo: navigationController.view.safeAreaLayoutGuide.topAnchor,
+                constant: verticalInset
+            ),
+            capsuleView.trailingAnchor.constraint(
+                equalTo: navigationController.view.trailingAnchor,
+                constant: -DMPMenuButtonLayout.trailingSpacing
+            ),
+            capsuleView.widthAnchor.constraint(equalToConstant: DMPMenuButtonLayout.capsuleSize.width),
+            capsuleView.heightAnchor.constraint(equalToConstant: DMPMenuButtonLayout.capsuleSize.height),
+
+            moreButton.leadingAnchor.constraint(equalTo: capsuleView.leadingAnchor),
+            moreButton.topAnchor.constraint(equalTo: capsuleView.topAnchor),
+            moreButton.bottomAnchor.constraint(equalTo: capsuleView.bottomAnchor),
+            moreButton.widthAnchor.constraint(equalToConstant: 43),
+
+            separatorView.centerXAnchor.constraint(equalTo: capsuleView.centerXAnchor),
+            separatorView.centerYAnchor.constraint(equalTo: capsuleView.centerYAnchor),
+            separatorView.widthAnchor.constraint(equalToConstant: 0.5),
+            separatorView.heightAnchor.constraint(equalToConstant: 16),
+
+            closeButton.trailingAnchor.constraint(equalTo: capsuleView.trailingAnchor),
+            closeButton.topAnchor.constraint(equalTo: capsuleView.topAnchor),
+            closeButton.bottomAnchor.constraint(equalTo: capsuleView.bottomAnchor),
+            closeButton.widthAnchor.constraint(equalToConstant: 43),
+        ])
+
+        self.capsuleView = capsuleView
+        self.capsuleMoreButton = moreButton
+        self.capsuleCloseButton = closeButton
+    }
+
+    private func makeCapsuleMoreImage() -> UIImage {
+        let color = UIColor(red: 31 / 255, green: 31 / 255, blue: 31 / 255, alpha: 1)
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 22, height: 22))
+        return renderer.image { context in
+            color.setFill()
+            let centerY: CGFloat = 11
+            let centers: [(CGFloat, CGFloat)] = [(5, 2), (11, 3.2), (17, 2)]
+            for (centerX, radius) in centers {
+                context.cgContext.fillEllipse(in: CGRect(
+                    x: centerX - radius,
+                    y: centerY - radius,
+                    width: radius * 2,
+                    height: radius * 2
+                ))
+            }
+        }.withRenderingMode(.alwaysOriginal)
+    }
+
+    private func makeCapsuleCloseImage() -> UIImage {
+        let color = UIColor(red: 31 / 255, green: 31 / 255, blue: 31 / 255, alpha: 1)
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 22, height: 22))
+        return renderer.image { context in
+            let cgContext = context.cgContext
+            let center = CGPoint(x: 11, y: 11)
+            color.setStroke()
+            cgContext.setLineWidth(2.4)
+            cgContext.strokeEllipse(in: CGRect(x: 3.2, y: 3.2, width: 15.6, height: 15.6))
+            color.setFill()
+            cgContext.fillEllipse(in: CGRect(
+                x: center.x - 3.1,
+                y: center.y - 3.1,
+                width: 6.2,
+                height: 6.2
+            ))
+        }.withRenderingMode(.alwaysOriginal)
+    }
+
+    private func activePageController() -> DMPPageController? {
+        if let pageController = navigationController?.topViewController as? DMPPageController {
+            return pageController
+        }
+        return (navigationController?.topViewController as? DMPTabBarContainerController)?
+            .currentPageController
+    }
+
+    @objc private func capsuleMoreButtonTapped() {
+        activePageController()?.showMiniProgramMenuFromCapsule()
+    }
+
+    @objc private func capsuleCloseButtonTapped() {
+        activePageController()?.closeMiniProgramFromCapsule()
     }
 
     public func pageRecord(webViewId: Int) -> DMPPageRecord? {
-        return pageRecords.first(where: { $0.webViewId == webViewId })
+        if let record = pageRecords.first(where: { $0.webViewId == webViewId }) {
+            return record
+        }
+        // pageRecords 的根位置只镜像当前选中 tab（updateRootTabRecord），
+        // 后台 tab 的记录存在 tab 容器自己的 tabPageRecords 里——这里兜底查询，
+        // 否则后台 tab 的迟到调用（如 wx.hideHomeButton）会找不到自己的页面
+        return currentTabBarContainer()?.pageRecord(webViewId: webViewId)
     }
 
     private func isTabBarPage(_ pagePath: String) -> Bool {
@@ -258,6 +420,7 @@ public class DMPNavigator: NSObject {
 
         // 如果目标是根控制器，直接返回到根
         if targetIndex == 0 {
+            setCapsuleVisible(false)
             pageLifecycle?.onUnload(webviewId: app!.getCurrentWebViewId())
             tabBarContainerController?.destroy()
             tabBarContainerController = nil
@@ -286,6 +449,24 @@ public class DMPNavigator: NSObject {
         }
     }
 
+    /// 返回首页（导航栏 home 按钮的唯一路由入口），终态都是只剩首页：
+    /// 首页是 tab 页走 switchTab（保留其它 tab 状态并露出 tabBar，自带清非 tab 栈）；
+    /// 首页非 tab 且当前是栈底，redirectTo 原地替换；非栈底（`homeButton: true`
+    /// 的内页）redirect 只会替换栈顶、栈底仍在，须 relaunch 清整栈
+    @MainActor
+    public func navigateHome() async {
+        guard let entryPagePath = app?.getBundleAppConfig()?.entryPagePath, !entryPagePath.isEmpty else {
+            return
+        }
+        if isTabBarPage(entryPagePath) {
+            await switchTab(to: entryPagePath)
+        } else if pageRecords.count <= 1 {
+            await redirectTo(to: entryPagePath)
+        } else {
+            await relaunch(to: entryPagePath)
+        }
+    }
+
     @MainActor
     public func redirectTo(to path: String, query: [String: Any]? = nil) async {
         guard let navigationController = navigationController else {
@@ -300,6 +481,11 @@ public class DMPNavigator: NSObject {
         }
 
         let currentIndex = navigationController.viewControllers.count - 1
+
+        // 栈底判定与 navigateHome 同源：pageRecords 是小程序页面栈的唯一权威。
+        // 原生 viewControllers 的栈底可能是宿主自己的页面（如 demo 的应用列表），
+        // 按原生栈位置判栈底会把"替换仅剩的一页"误判为非栈底，导航栏因此错显返回箭头
+        let replacingStackBottom = pageRecords.count <= 1
 
         // 如果当前只有一个页面，则需要特殊处理
         if currentIndex == 0 {
@@ -348,7 +534,7 @@ public class DMPNavigator: NSObject {
             appConfig: app!.getAppConfig()!,
             app: app,
             navigator: self,
-            isRoot: false
+            isRoot: replacingStackBottom
         )
 
         let pageRecord = DMPPageRecord(
@@ -388,6 +574,41 @@ public class DMPNavigator: NSObject {
         )
     }
 
+    /// Rebuild the mini-program runtime between tearing down the old page tree
+    /// and launching the new root page. Unlike `relaunch`, this is an app-level
+    /// cold reload and intentionally runs the launch-loading path again.
+    @MainActor
+    func reloadMiniProgram(
+        animated: Bool = false,
+        prepareRuntime: @MainActor () async -> DMPLaunchConfig
+    ) async {
+        guard let navigationController = navigationController else {
+            DMPLogger.debug("导航控制器未设置")
+            return
+        }
+
+        navigationController.view.endEditing(true)
+        let hostControllers = hostViewControllers(in: navigationController)
+        let pageControllers = navigationController.viewControllers.compactMap {
+            $0 as? DMPPageController
+        }
+
+        // Lifecycle and WebView teardown must still reach the old service.
+        clearMiniProgramPageState()
+        pageControllers.forEach { $0.destroy() }
+
+        let launchConfig = await prepareRuntime()
+        await app?.openPage(launchConfig: launchConfig)
+
+        guard let newRootController = navigationController.topViewController else {
+            return
+        }
+        navigationController.setViewControllers(
+            hostControllers + [newRootController],
+            animated: animated
+        )
+    }
+
     @MainActor
     public func closeMiniProgram(
         animated: Bool = true,
@@ -399,6 +620,7 @@ public class DMPNavigator: NSObject {
         }
 
         navigationController.view.endEditing(true)
+        setCapsuleVisible(false)
         let hostControllers = hostViewControllers(in: navigationController)
         clearMiniProgramPageState()
 

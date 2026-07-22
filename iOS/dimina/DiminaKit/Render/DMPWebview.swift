@@ -55,9 +55,15 @@ public protocol DMPWebViewDelegate: AnyObject {
 }
 
 public class DMPWebview: NSObject, WKNavigationDelegate, WKScriptMessageHandler, ObservableObject {
+    private struct LoadingStateObserver {
+        let ownerToken: UUID?
+        let handler: (Bool) -> Void
+    }
+
     private var webView: WKWebView
     private weak var delegate: DMPWebViewDelegate?
     internal var jsBridgeCallbacks: [String: (Any) -> Void] = [:]
+    private var loadingStateObserver: LoadingStateObserver?
 
     // Add WebViewLogger member variable
     internal var logger: DMPWebViewLogger?
@@ -80,14 +86,43 @@ public class DMPWebview: NSObject, WKNavigationDelegate, WKScriptMessageHandler,
     }
 
     public var appName: String
-    public var onLoadingStateChanged: ((Bool) -> Void)?
+    public var onLoadingStateChanged: ((Bool) -> Void)? {
+        get {
+            loadingStateObserver?.handler
+        }
+        set {
+            loadingStateObserver = newValue.map {
+                LoadingStateObserver(ownerToken: nil, handler: $0)
+            }
+        }
+    }
+
+    /// Register a loading observer owned by one page-controller generation.
+    /// A released WebView can be acquired again before the old controller is
+    /// deallocated, so observer cleanup must not affect the new owner.
+    internal func setLoadingStateObserver(
+        ownerToken: UUID,
+        handler: @escaping (Bool) -> Void
+    ) {
+        loadingStateObserver = LoadingStateObserver(
+            ownerToken: ownerToken,
+            handler: handler
+        )
+    }
+
+    internal func clearLoadingStateObserver(ownerToken: UUID) {
+        guard loadingStateObserver?.ownerToken == ownerToken else {
+            return
+        }
+        loadingStateObserver = nil
+    }
     
     // Publish notification when state changes
     @Published public var poolState: DMPWebViewState = .available {
         didSet {
             // When the state changes, trigger UI update
             objectWillChange.send()
-            onLoadingStateChanged?(poolState.isLoading)
+            loadingStateObserver?.handler(poolState.isLoading)
         }
     }
     

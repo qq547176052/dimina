@@ -20,6 +20,8 @@ import org.json.JSONObject
  */
 private const val TAG = "DiminaWebView"
 
+private class WebViewReference(var value: WebView? = null)
+
 @Composable
 fun DiminaWebView(
     onInitReady: (webView: WebView) -> Unit,
@@ -32,6 +34,7 @@ fun DiminaWebView(
 ) {
     val context = LocalContext.current
     val webViewIdentifier = remember { identifier ?: "webview_${System.currentTimeMillis()}" }
+    val webViewReference = remember(webViewIdentifier) { WebViewReference() }
 
     // 初始化缓存管理器
     remember {
@@ -45,7 +48,8 @@ fun DiminaWebView(
     DisposableEffect(webViewIdentifier) {
         onDispose {
             if (enableCache) {
-                releaseWebViewToCache(webViewIdentifier)
+                releaseWebViewToCache(webViewIdentifier, webViewReference.value)
+                webViewReference.value = null
                 LogUtils.d(TAG, "WebView released on dispose: $webViewIdentifier")
             }
         }
@@ -77,6 +81,7 @@ fun DiminaWebView(
                     // 传统方式创建WebView（使用WebViewCacheManager中的统一配置）
                     createWebView(context, onPageCompleted, appId)
                 }.apply {
+                    webViewReference.value = this
                     onInitReady(this)
                     LogUtils.d(TAG, "WebView initialized with identifier: $webViewIdentifier")
                     LogUtils.d(TAG, "Cache info: ${getWebViewCacheInfo()}")

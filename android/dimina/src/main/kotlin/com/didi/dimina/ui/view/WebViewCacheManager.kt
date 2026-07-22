@@ -8,6 +8,7 @@ import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.os.Handler
 import android.os.Looper
+import android.view.ViewGroup
 import android.webkit.MimeTypeMap
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -197,27 +198,58 @@ object WebViewCacheManager : ComponentCallbacks2 {
     /**
      * 释放WebView实例到缓存池
      */
-    fun releaseWebView(identifier: String) {
+    fun releaseWebView(identifier: String, expectedWebView: WebView? = null) {
         mainHandler.post {
-            activeWebViews.remove(identifier)?.let { webView ->
-                LogUtils.d(TAG, "Releasing WebView to cache: $identifier")
-                
-                // 清理WebView状态
-                cleanWebView(webView)
-                
-                // 检查缓存池大小
-                if (idleWebViews.size >= MAX_CACHE_SIZE) {
-                    // 移除最老的实例
-                    val oldestCached = idleWebViews.poll()
-                    oldestCached?.let {
-                        LogUtils.d(TAG, "Destroying oldest cached WebView")
-                        destroyWebView(it.webView)
-                    }
-                }
-                
-                // 添加到空闲池
-                idleWebViews.offer(CachedWebView(webView))
+            val activeWebView = activeWebViews[identifier] ?: return@post
+            if (expectedWebView != null && activeWebView !== expectedWebView) {
+                LogUtils.d(TAG, "Ignoring stale WebView release for: $identifier")
+                return@post
             }
+            if (!activeWebViews.remove(identifier, activeWebView)) {
+                return@post
+            }
+
+            LogUtils.d(TAG, "Releasing WebView to cache: $identifier")
+
+            // AndroidView 可能尚未执行 holder 的 child 移除；入池前先确保解绑。
+            detachFromParent(activeWebView)
+            cleanWebView(activeWebView)
+
+            // 检查缓存池大小
+            if (idleWebViews.size >= MAX_CACHE_SIZE) {
+                // 移除最老的实例
+                val oldestCached = idleWebViews.poll()
+                oldestCached?.let {
+                    LogUtils.d(TAG, "Destroying oldest cached WebView")
+                    destroyWebView(it.webView)
+                }
+            }
+
+            // 添加到空闲池
+            idleWebViews.offer(CachedWebView(activeWebView))
+        }
+    }
+
+    /**
+     * 同步清除某批页面正在持有的 WebView。
+     *
+     * 用于小程序冷重启：新 Activity 会复用相同的 tab identifier，必须在它创建
+     * AndroidViewHolder 前，把旧 holder 中的 child 解绑并销毁。
+     */
+    fun evictAndDestroy(webViews: Collection<WebView>) {
+        if (webViews.isEmpty()) return
+
+        mainHandler.runOnUiThread {
+            val targets = webViews.toSet()
+
+            activeWebViews.entries
+                .filter { it.value in targets }
+                .forEach { activeWebViews.remove(it.key, it.value) }
+            removeCachedWebViews(idleWebViews, targets)
+            removeCachedWebViews(preCreatedWebViews, targets)
+
+            targets.forEach(::destroyWebView)
+            LogUtils.d(TAG, "Evicted and destroyed ${targets.size} active WebViews")
         }
     }
     
@@ -268,6 +300,8 @@ object WebViewCacheManager : ComponentCallbacks2 {
      */
     private fun resetWebView(webView: WebView, onPageLoadFinished: () -> Unit, appId: String = "") {
         try {
+            detachFromParent(webView)
+
             // 停止加载
             webView.stopLoading()
             
@@ -305,6 +339,7 @@ object WebViewCacheManager : ComponentCallbacks2 {
      */
     private fun destroyWebView(webView: WebView) {
         try {
+            detachFromParent(webView)
             webView.stopLoading()
             webView.loadUrl("about:blank")
             webView.clearHistory()
@@ -314,6 +349,22 @@ object WebViewCacheManager : ComponentCallbacks2 {
         } catch (e: Exception) {
             LogUtils.e(TAG, "Failed to destroy WebView", e)
         }
+    }
+
+    private fun removeCachedWebViews(
+        cache: LinkedBlockingQueue<CachedWebView>,
+        targets: Set<WebView>,
+    ) {
+        val iterator = cache.iterator()
+        while (iterator.hasNext()) {
+            if (iterator.next().webView in targets) {
+                iterator.remove()
+            }
+        }
+    }
+
+    private fun detachFromParent(webView: WebView) {
+        (webView.parent as? ViewGroup)?.removeView(webView)
     }
     
     /**
@@ -674,8 +725,8 @@ internal fun createWebView(context: Context, onPageLoadFinished: () -> Unit, app
 /**
  * 辅助函数：手动释放WebView到缓存池
  */
-fun releaseWebViewToCache(identifier: String) {
-    WebViewCacheManager.releaseWebView(identifier)
+fun releaseWebViewToCache(identifier: String, expectedWebView: WebView? = null) {
+    WebViewCacheManager.releaseWebView(identifier, expectedWebView)
 }
 
 /**
