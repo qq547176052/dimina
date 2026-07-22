@@ -519,10 +519,14 @@ class DiminaActivity : ComponentActivity() {
             try {
                 // jsapp uses its own version and extracted-file readiness. The host-app
                 // update marker is shared with JSSDK and is therefore not a safe gate.
+                // 门控必须以"本次 APK 内置(assets)的版本"为准, 而非 getMiniProgram 读取的
+                // 已解压文件(filesDir)版本 —— 否则覆盖安装时 assets 已更新但 filesDir 仍是旧版,
+                // bundledVersion 永远等于 installedVersion, 新包永不被解压(修改不生效)。
+                val bundledVersion = if (miniProgram.root) readBundledVersionCode(appId) else 0
                 val shouldExtract = if (miniProgram.root) {
                     val localVersion = VersionUtils.getAppVersion(appId)
                     BundledResourcePolicy.shouldExtract(
-                        bundledVersion = miniProgram.versionCode,
+                        bundledVersion = bundledVersion,
                         installedVersion = localVersion,
                         requiredResourcePresent = findAppConfigFile("jsapp/$appId") != null,
                     )
@@ -530,7 +534,7 @@ class DiminaActivity : ComponentActivity() {
 
                 if (shouldExtract) {
                     if (Utils.unzipAssets(this@DiminaActivity, "jsapp/$appId/$appId.zip", "jsapp/$appId")) {
-                        VersionUtils.setAppVersion(appId, miniProgram.versionCode)
+                        VersionUtils.setAppVersion(appId, bundledVersion)
                         LogUtils.d(tag, "Mini program extraction completed successfully")
                     } else {
                         LogUtils.e(tag, "Failed to extract mini program for appId: $appId")
@@ -1161,6 +1165,20 @@ class DiminaActivity : ComponentActivity() {
             File(miniProgramDir, "$root/app-config.json"),
             File(miniProgramDir, "app-config.json"),
         ).firstOrNull(File::isFile)
+    }
+
+    /**
+     * 读取 APK 内置(assets)小程序 config.json 的 versionCode, 代表"本次打包进 APK 的版本"。
+     * 解压门控必须以它为 bundledVersion, 不能用 getMiniProgram 读到的已解压 filesDir 旧版本。
+     */
+    private fun readBundledVersionCode(appId: String): Int {
+        return try {
+            val text = assets.open("jsapp/$appId/config.json").bufferedReader().use { it.readText() }
+            JSONObject(text).optInt("versionCode", 0)
+        } catch (e: Exception) {
+            LogUtils.e(tag, "readBundledVersionCode fail appId=$appId: ${e.message}")
+            0
+        }
     }
 
     /**
