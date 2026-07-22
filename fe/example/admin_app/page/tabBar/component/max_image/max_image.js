@@ -6,6 +6,9 @@
 //   2026-07-21 修复: URLEncoder 把空格编码为 '+', decodeURIComponent 不会还原,
 //             需先 '+'->' ' 再解码, 否则 JSON.parse 失败导致参数/图片全空
 //   2026-07-21 按推送字段重构界面, 仅展示 标题/内容/全景图/人脸图, 移除返回按钮与调试区
+//   2026-07-22 onLoad 增加 console.log 打印原始 options 与解析后 payload, 便于排查接收参数
+//   2026-07-22 修复全景图显示不对: payload.max_image 含未编码中文导致加载失败,
+//             改 encodeURI 编码; 并去掉回退人脸图的误导逻辑(二者非同图), 失败仅标记 imgError
 Page({
   data: {
     received: false,   // 是否成功解析到 payload
@@ -19,7 +22,14 @@ Page({
   },
 
   onLoad(options) {
+    console.log('[max_image] onLoad options:', options)
     const payload = this.parsePayload(options && options.payload)
+    // console.log('[max_image] parsed payload:', payload)
+    console.log('[max_image] 全景图:', payload.max_image) // [JS] [max_image] 全景图: https://pc.jsauto.hk.cn:8899/dd/face-records/image?path=数据/人脸抓拍库/2026-07-22/陌生人_陌生人_1784690390_全景图.jpg
+    // console.log('[max_image] 人脸图:', payload.image)
+    console.log('[max_image] 标题:', payload.title)
+    console.log('[max_image] 内容:', payload.content)
+
     if (!payload) {
       this.setData({ received: false })
       return
@@ -28,7 +38,7 @@ Page({
       received: true,
       title: payload.title || '',
       content: payload.content || '',
-      panoImage: payload.max_image || '',
+      panoImage: payload.max_image ? encodeURI(payload.max_image) : '',
       faceImage: typeof payload.image === 'string' ? payload.image : '',
       fallbackImage: typeof payload.image === 'string' ? payload.image : '',
       imgError: false,
@@ -40,10 +50,10 @@ Page({
     this.setData({ scrollIntoView: 'maxBottom' })
   },
 
-  // 全景图加载失败: 回退到 base64 人脸图(离线可用)
+  // 全景图加载失败: 仅标记错误, 不回退人脸图(两者是不同图, 回退会误导)
   onImageError() {
-    if (this.data.fallbackImage && !this.data.imgError) {
-      this.setData({ panoImage: this.data.fallbackImage, imgError: true })
+    if (!this.data.imgError) {
+      this.setData({ imgError: true })
     }
   },
 

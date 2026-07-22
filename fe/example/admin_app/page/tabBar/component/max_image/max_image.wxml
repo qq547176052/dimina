@@ -25,6 +25,7 @@
         show-menu-by-longpress
         binderror="onImageError"
       ></image>
+      <text class="err" wx:if="{{imgError}}">全景图加载失败, 请检查网络或地址</text>
     </view>
   </view>
 </scroll-view>
