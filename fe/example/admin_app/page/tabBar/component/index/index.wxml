@@ -1,9 +1,39 @@
 <!--page/tabBar/component/index/index.wxml-->
-<!--简介: 组件 Tab 首页视图, 仅保留标题, 顶部预留 1/15 屏高给刘海-->
+<!--简介: 组件 Tab 首页视图, 展示宿主小程序列表, 点击拉起对应小程序-->
 <!--履历: 2026-07-21 由空页面填充为基础组件展示页-->
 <!--履历: 2026-07-21 增加跳转 max_image 按钮-->
 <!--履历: 2026-07-21 增加带推送参数跳转按钮-->
 <!--履历: 2026-07-21 精简为仅保留标题, 顶部预留 1/15 屏高留白给刘海-->
+<!--履历: 2026-07-22 改为小程序列表, 参考宿主 MainActivity 列表样式(头像+名称+搜索)-->
 <scroll-view class="page" scroll-y>
-  <text class="title">接收通知</text>
+  <view class="header">
+    <text class="header-title">应用列表</text>
+  </view>
+
+  <view class="search">
+    <input
+      class="search-input"
+      placeholder="搜索小程序"
+      placeholder-class="search-ph"
+      value="{{keywords}}"
+      bindinput="onSearchInput"
+    />
+  </view>
+
+  <view class="list">
+    <view
+      class="item"
+      wx:for="{{displayList}}"
+      wx:key="appId"
+      data-appid="{{item.appId}}"
+      bindtap="onTapItem"
+    >
+      <view class="avatar" style="background:{{item.color}}">{{item.avatar}}</view>
+      <text class="name">{{item.name}}</text>
+    </view>
+  </view>
+
+  <view class="empty" wx:if="{{displayList.length === 0}}">
+    <text>暂无小程序</text>
+  </view>
 </scroll-view>
