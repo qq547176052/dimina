@@ -6,12 +6,39 @@
 <!--履历: 2026-07-21 精简为仅保留标题, 顶部预留 1/15 屏高留白给刘海-->
 <!--履历: 2026-07-22 改为小程序列表, 参考宿主 MainActivity 列表样式(头像+名称+搜索)-->
 <!--履历: 2026-07-22 页面底板(footer)展示当前小程序版本号(取自 wx.getSystemInfoSync appVersion)-->
+<!--履历: 2026-07-22 新增 QQ 式下拉面板: 顶部把手下拉唤出添加小程序页面, 可下拉关闭-->
+<!--履历: 2026-07-22 新增仿 QQ 顶栏: 左上角头像/昵称/在线状态(抽屉), 右上角加号(下拉菜单含扫一扫)-->
+<!--履历: 2026-07-22 优化下拉/上滑交互: 橡皮筋阻尼 + 速度甩动 + 点击展开 + 关闭按钮 + 方向修正-->
+<!--履历: 2026-07-22 沉浸式状态栏: navbar 顶部用 statusBarHeight(px) 预留系统状态栏, 避免与状态栏重叠-->
+<!--履历: 2026-07-22 下拉交互改为: 列表滚到顶继续下拉唤出面板, 面板整体上滑关闭(移除把手), 滚动增强-->
 <view class="page-wrap">
-  <scroll-view class="page" scroll-y>
-    <view class="header">
-      <text class="header-title">应用列表</text>
+  <!-- 顶部导航栏: 仿 QQ, 左上角头像+昵称+在线状态(点开抽屉), 右上角加号(点开菜单) -->
+  <view class="navbar" style="padding-top: calc({{statusBarHeight}}px + 16rpx);">
+    <view class="nav-left" bindtap="openDrawer">
+      <view class="nav-avatar">{{avatarText}}</view>
+      <view class="nav-user">
+        <text class="nav-name">{{nickName}}</text>
+        <text class="nav-status">{{onlineStatus}}</text>
+      </view>
     </view>
+    <view class="nav-right">
+      <view class="nav-add" bindtap="toggleMenu">
+        <text class="nav-add-icon">+</text>
+      </view>
+    </view>
+  </view>
 
+  <scroll-view
+    class="page"
+    scroll-y
+    enhanced="{{true}}"
+    bounces="{{true}}"
+    bindscroll="onPageScroll"
+    bindtouchstart="onPullStart"
+    bindtouchmove="onPullMove"
+    bindtouchend="onPullEnd"
+    data-role="list"
+  >
     <view class="search">
       <input
         class="search-input"
@@ -41,4 +68,76 @@
   </scroll-view>
 
   <view class="footer">版本 {{version}}</view>
+
+  <!-- 下拉面板: 添加小程序 -->
+  <view
+    class="pull-mask {{panelTransition ? 'transition' : ''}}"
+    style="transform: translateY({{panelY}}px); opacity: {{panelOpacity}};"
+  >
+    <view
+      class="pull-panel"
+      bindtouchstart="onPullStart"
+      bindtouchmove="onPullMove"
+      bindtouchend="onPullEnd"
+      data-role="panel"
+    >
+      <!-- 面板右上角关闭按钮 -->
+      <view class="pull-panel-close" catchtap="closePanel">×</view>
+
+      <text class="pull-panel-title">添加小程序</text>
+
+      <view class="add-form">
+        <input
+          class="add-input"
+          placeholder="小程序 appId (如 wx1234567890)"
+          placeholder-class="add-ph"
+          value="{{newAppId}}"
+          bindinput="onAppIdInput"
+        />
+        <input
+          class="add-input"
+          placeholder="小程序名称"
+          placeholder-class="add-ph"
+          value="{{newName}}"
+          bindinput="onNameInput"
+        />
+        <input
+          class="add-input"
+          placeholder="入口路径(可选, 如 page/index/index)"
+          placeholder-class="add-ph"
+          value="{{newPath}}"
+          bindinput="onPathInput"
+        />
+        <button class="add-btn" bindtap="onAddMiniProgram">添加</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 左侧抽屉: 点击左上角头像/昵称弹出 -->
+  <view class="drawer-mask {{drawerOpen ? 'show' : ''}}" bindtap="closeDrawer">
+    <view class="drawer {{drawerOpen ? 'open' : ''}}" catchtap="noop">
+      <view class="drawer-profile">
+        <view class="drawer-avatar">{{avatarText}}</view>
+        <text class="drawer-name">{{nickName}}</text>
+        <text class="drawer-status">{{onlineStatus}}</text>
+      </view>
+      <view class="drawer-menu">
+        <view class="drawer-item" bindtap="onDrawerItem" data-key="favorite">我的收藏</view>
+        <view class="drawer-item" bindtap="onDrawerItem" data-key="setting">设置</view>
+        <view class="drawer-item" bindtap="onDrawerItem" data-key="exit">退出登录</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 右上角下拉菜单: 点击加号弹出, 含扫一扫等 -->
+  <view class="menu-mask {{menuOpen ? 'show' : ''}}" bindtap="closeMenu">
+    <view class="menu {{menuOpen ? 'show' : ''}}" catchtap="noop">
+      <view class="menu-item" bindtap="onScan">
+        <text class="menu-item-text">扫一扫</text>
+      </view>
+      <view class="menu-item" bindtap="onMenuAddFriend">
+        <text class="menu-item-text">添加好友</text>
+      </view>
+    </view>
+  </view>
 </view>

@@ -17,14 +17,15 @@ object AppConfig {
     // ---- 列表排除的小程序 ----
     /** AppList.getList 不展示的小程序 appId(含默认启动小程序自身), 按实际环境维护 */
     val EXCLUDED_LIST_APP_IDS = setOf(
-        "wx1c01b35002d3ba14",
-        "wx6d707864656d6f01",
-        "wx92269e3b2f304afc",
-        "wxa87711629f79170c",
-        "wxbaf4b47de04f1d8a",
-        "wxd58cedf6d1e1c52c",
-        "wxe5f52902cf4de896",
-        "wxe5f52902cf4dejs1",
+        "2145"
+//        "wx1c01b35002d3ba14",
+        // "wx6d707864656d6f01",
+        // "wx92269e3b2f304afc",
+        // "wxa87711629f79170c",
+        // "wxbaf4b47de04f1d8a",
+        // "wxd58cedf6d1e1c52c",
+        // "wxe5f52902cf4de896",
+        // "wxe5f52902cf4dejs1",
     )
 
     // ---- MQTT 推送, 按实际环境替换 ----
