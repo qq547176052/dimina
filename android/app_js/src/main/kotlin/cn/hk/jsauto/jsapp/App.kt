@@ -28,16 +28,14 @@ class App : Application() {
         PushModule.initDefault(this)
         // 注册默认启动小程序（DiminaActivity 作为 LAUNCHER 时兜底使用）
         // 先从 config.json 读取参数配置存到变量, 再设置默认小程序, 便于后期修改配置
-        val miniProgram = Dimina.getInstance().getMiniProgram(defaultAppId)
+        val miniProgram = Dimina.getInstance().getMiniProgram(defaultAppId)//获取小程序配置
         if (miniProgram == null) {
             LogUtils.e(TAG, "打开小程序失败: appId=$defaultAppId 未读取到 config.json 或解析出错")
         } else {
-            // name 为只读 val, 修改配置须用 copy(); 示例改名为"测试", 后期改配置直接改 copy 参数即可
-            val configured = miniProgram.copy(name = " ")
-            LogUtils.i(TAG, "打开小程序: appId=${configured.appId}, name=${configured.name}, path=${configured.path}, version=${configured.versionName}")
-            Dimina.getInstance().setDefaultMiniProgram(configured)
-
-
+//             name 为只读 val, 修改配置须用 copy(); 示例改名为"测试", 后期改配置直接改 copy 参数即可
+             val configured = miniProgram.copy(name = " ")
+             LogUtils.i(TAG, "打开小程序: appId=${configured.appId}, name=${configured.name}, path=${configured.path}, version=${configured.versionName}")
+             Dimina.getInstance().setDefaultMiniProgram(configured) //打开小程序
         }
     }
 
