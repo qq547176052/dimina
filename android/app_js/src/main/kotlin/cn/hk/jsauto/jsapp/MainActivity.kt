@@ -6,6 +6,7 @@ import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
+import java.io.File
 import com.didi.dimina.Dimina
 import com.didi.dimina.bean.MiniProgram
 import com.didi.dimina.common.LogUtils
@@ -22,6 +23,8 @@ import org.json.JSONObject
  *   2026-07-22 新增(由 SplashActivity 重命名), 替代 DiminaActivity 直接作为 LAUNCHER 的冷启动白屏问题
  *   2026-07-22 AppList 扩展模块与前台 Activity 跟踪由 App.kt 迁入本类, 默认小程序名称置为 " "
  *   2026-07-22 改用 ComponentActivity 基类, 在拉起默认小程序前先申请 POST_NOTIFICATIONS 权限
+ *   2026-07-23 AppList 新增 remove 事件: 小程序首页左滑删除时直接删除(内存屏蔽+清理解压目录), 不持久化, 列表重新获取
+ *   2026-07-23 整理: onCreate 统一经 registerExtensions() 注册前台 Activity 跟踪与 AppList 扩展模块
  */
 class MainActivity : ComponentActivity() {
 
@@ -32,10 +35,13 @@ class MainActivity : ComponentActivity() {
     // 前台 Activity, 供 AppList 扩展模块拉起(其他)小程序
     private var currentActivity: Activity? = null
 
+    // 本会话内已删除(隐藏)的小程序 appId, 仅内存不持久化; 重启后由 assets 重新载入, 已删项会再次出现
+    private val deletedAppIds = mutableSetOf<String>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        registerActivityLifecycle()
-        registerAppListModule()
+        // 统一在此注册所有扩展能力(前台 Activity 跟踪 + AppList 扩展模块)
+        registerExtensions()
         // 先申请通知权限(Android 13+ 为运行时权限), 结果回调后再拉起默认小程序并 finish,
         // 避免权限对话框因 Activity 过早 finish 而失效
         requestNotificationPermission { launchDefaultMiniProgram() }
@@ -60,6 +66,12 @@ class MainActivity : ComponentActivity() {
         finish()
     }
 
+    // 统一注册入口: 前台 Activity 跟踪 + AppList 扩展模块(列表/拉起/删除)
+    private fun registerExtensions() {
+        registerActivityLifecycle()
+        registerAppListModule()
+    }
+
     // 跟踪前台 Activity, 供 AppList 扩展模块拉起(其他)小程序使用
     // 注: registerActivityLifecycleCallbacks 属 Application, 故经 application 调用
     private fun registerActivityLifecycle() {
@@ -76,6 +88,22 @@ class MainActivity : ComponentActivity() {
         })
     }
 
+    // 直接删除小程序: 加入内存屏蔽集合(仅本会话)并清理解压目录, 随后列表重新获取时不再包含该项
+    // 不持久化: 重启后由 assets 重新载入, 已删项会再次出现(assets 为只读, 运行期不可真正删除内置包)
+    // appId 来自小程序首页左滑删除时 wx.extBridge 的 remove 事件
+    private fun removeMiniProgram(appId: String, callback: com.didi.dimina.api.ext.ExtCallback) {
+        if (appId.isBlank()) {
+            callback.onFail(JSONObject().apply { put("errMsg", "remove fail: empty appId") })
+            return
+        }
+        deletedAppIds.add(appId)
+        // 清理已解压的小程序目录(filesDir/jsapp/<appId>), 释放空间; 内置 assets 不可删, 以内存集合屏蔽
+        val dir = File(filesDir, "jsapp/$appId")
+        if (dir.exists()) runCatching { dir.deleteRecursively() }
+        LogUtils.i(TAG, "小程序已删除(本会话): appId=$appId")
+        callback.onSuccess(JSONObject().apply { put("appId", appId) })
+    }
+
     // 注册 AppList 扩展模块: 小程序首页(index.js)经 wx.extBridge 获取列表并拉起对应小程序
     private fun registerAppListModule() {
         Dimina.getInstance().registerExtModule("AppList") { event, data, callback ->
@@ -83,7 +111,9 @@ class MainActivity : ComponentActivity() {
                 "getList" -> {
                     val arr = JSONArray()
                     for (mp in getMiniProgramsList()) {
-                        if (mp.appId in AppConfig.EXCLUDED_LIST_APP_IDS) continue // 排除清单内的小程序
+                        // 排除清单内的小程序, 以及已删除(隐藏)的小程序
+                        if (mp.appId in AppConfig.EXCLUDED_LIST_APP_IDS) continue
+                        if (mp.appId in deletedAppIds) continue
                         arr.put(JSONObject().apply {
                             put("appId", mp.appId)
                             put("name", mp.name)
@@ -96,15 +126,27 @@ class MainActivity : ComponentActivity() {
                 }
                 "launch" -> {
                     val appId = data.optString("appId")
-                    val mp = Dimina.getInstance().getMiniProgram(appId)
-                    if (mp != null && currentActivity != null) {
-                        Dimina.getInstance().startMiniProgram(currentActivity!!, mp)
-                        callback.onSuccess(JSONObject())
-                    } else {
+                    // 已删除的小程序禁止拉起
+                    if (appId in deletedAppIds) {
                         callback.onFail(JSONObject().apply {
-                            put("errMsg", "launch fail: appId=$appId not found or no activity")
+                            put("errMsg", "launch fail: appId=$appId has been removed")
                         })
+                        null
+                    } else {
+                        val mp = Dimina.getInstance().getMiniProgram(appId)
+                        if (mp != null && currentActivity != null) {
+                            Dimina.getInstance().startMiniProgram(currentActivity!!, mp)
+                            callback.onSuccess(JSONObject())
+                        } else {
+                            callback.onFail(JSONObject().apply {
+                                put("errMsg", "launch fail: appId=$appId not found or no activity")
+                            })
+                        }
+                        null
                     }
+                }
+                "remove" -> {
+                    removeMiniProgram(data.optString("appId"), callback)
                     null
                 }
                 else -> {

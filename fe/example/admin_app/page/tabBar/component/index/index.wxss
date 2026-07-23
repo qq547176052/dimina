@@ -1,7 +1,8 @@
 /* page/tabBar/component/index/index.wxss */
-/* 简介: 组件 Tab 首页样式, 小程序列表(仿宿主 MainActivity) */
+/* 简介: 组件 Tab 首页样式, 小程序列表(仿宿主 MainActivity), 支持左滑置顶/删除 */
 /* 履历: 2026-07-22 新增小程序列表样式, 参考宿主 MainActivity */
 /* 履历: 2026-07-22 页面改为 flex 列布局, 底部新增版本号 footer */
+/* 履历: 2026-07-23 列表项改为左滑操作, 新增 swipe-item / swipe-actions / swipe-front 样式 */
 .page-wrap {
   height: 100vh;
   box-sizing: border-box;
@@ -54,14 +55,54 @@
   overflow: hidden;
 }
 
-.item {
+.swipe-item {
+  position: relative;
+  height: 152rpx;
+  overflow: hidden;
+}
+
+/* 操作按钮层: 绝对定位在右侧, 位于内容层之下; 内容层左移时被露出 */
+/* 未展开(transl<0 即 .open)时 opacity:0 隐藏, 避免相邻项缝隙透出彩色按钮; 展开态才显示并响应点击 */
+.swipe-actions {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 320rpx;
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  /* 未展开时不响应点击, 避免覆盖在内容右侧的隐藏按钮误触发 */
+  pointer-events: none;
+}
+
+.swipe-actions.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 内容层: 默认盖住按钮; 左滑时 translateX 为负露出按钮; no-anim 在横向拖拽时关闭过渡, 1:1 跟手 */
+.swipe-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  background: #FFFFFF;
   display: flex;
   align-items: center;
   padding: 28rpx 24rpx;
-  position: relative;
+  box-sizing: border-box;
+  transform: translateX(0);
+  transition: transform 0.2s ease;
+  will-change: transform;
 }
 
-.item::after {
+.swipe-content.no-anim {
+  transition: none;
+}
+
+.swipe-content::after {
   content: '';
   position: absolute;
   left: 120rpx;
@@ -71,8 +112,25 @@
   background: #EEEEEE;
 }
 
-.item:last-child::after {
+.swipe-item:last-child .swipe-content::after {
   display: none;
+}
+
+.swipe-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  font-size: 30rpx;
+}
+
+.swipe-btn.top {
+  background: #07C160;
+}
+
+.swipe-btn.del {
+  background: #FF4D4F;
 }
 
 .avatar {

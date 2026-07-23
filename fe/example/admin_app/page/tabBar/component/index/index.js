@@ -1,30 +1,47 @@
 // page/tabBar/component/index/index.js
-// 简介: 组件 Tab 首页, 展示宿主侧小程序列表, 点击经 wx.extBridge 拉起对应小程序.
+// 简介: 组件 Tab 首页, 展示宿主侧小程序列表, 支持左滑置顶/删除、右滑开抽屉、顶部下拉添加小程序面板.
 // 履历:
-//   2026-07-21 由空页面填充为基础组件展示页
-//   2026-07-21 增加跳转 max_image 按钮
-//   2026-07-21 增加带推送参数跳转按钮
-//   2026-07-21 精简为仅保留标题, 移除按钮与示例数据
-//   2026-07-22 改为展示宿主小程序列表(经 wx.extBridge AppList.getList), 点击经 AppList.launch 拉起
-//   2026-07-22 页面底板展示当前小程序版本号(经 wx.getSystemInfoSync 取 appVersion)
-//   2026-07-22 新增 QQ 式下拉面板: 顶部把手下拉唤出添加小程序页面, 松手过半吸附开/合, 可下拉关闭
-//   2026-07-22 新增仿 QQ 顶栏: 左上角头像/昵称/在线状态(点开抽屉), 右上角加号(下拉菜单含扫一扫)
-//   2026-07-22 优化下拉/上滑交互: 橡皮筋阻尼 + 速度甩动 + 点击展开 + 关闭按钮 + 方向修正
-//   2026-07-22 沉浸式状态栏: navbar 顶部用 statusBarHeight(px) 预留系统状态栏高度
-//   2026-07-22 下拉交互改为: 列表滚到顶下拉唤出面板 / 面板整体上滑关闭(移除把手) / 滚动增强
-//   2026-07-23 修复下拉在 dimina(列表有内容)失效: 改用 scroll-view 原生 refresher 触发面板(组件内置, 不与原生滚动抢手势); 面板上滑关闭保留自定义 catchtouch
+//   2026-07-22 页面基于宿主列表重构(搜索/头像/版本号), 仿 QQ 顶栏+左侧抽屉+下拉菜单
+//   2026-07-23 左滑改用 movable-view(bindchange 跟踪实时位移), 阈值吸附展开/复位; 删除通知宿主不持久化, 成功后重拉列表
+//   2026-07-23 重写整理: 右滑开抽屉挂根容器, 下拉面板用原生 refresher, 统一手势收口, 修复"滑哪停哪"无吸附 bug
+//   2026-07-23 优化: 未展开按钮 opacity 隐藏防缝隙透出; 展开项回拖 1/5 即收起(关闭阀值调小)
+//   2026-07-23 抽屉手势: 列表区右滑开抽屉(起点有展开项时让位给关闭); 抽屉打开时右滑关闭抽屉
+//   2026-07-23 阈值定死 px: 列表项开/关、抽屉开/关、面板上滑收起均改用固定 px, 不再用比例(比例在不同屏宽手感不一致)
+//   2026-07-23 修复: const 常量移出 Page({}) 对象字面量(原写法导致 SyntaxError 整页不可用); 左滑位移改用路径更新降渲染开销; 补面板手势空触摸点保护
+//   2026-07-23 关闭列表项阀值调小(SWIPE_CLOSE_PX 30→15, 更易收起); 抽屉面板挂专属右滑手势关闭
+//   2026-07-23 开抽屉判定改为"当前项"展开(非任意项): 右滑未展开项仍可正常开抽屉, 仅右滑已展开项才让位关闭
+//   2026-07-23 关闭判定改以"展开位"为基准(原以闭合位为基准需几乎拖回原位才收起, 右滑易吸附回开); SWIPE_CLOSE_PX 15→20
+//   2026-07-23 展开阀值调小(SWIPE_OPEN_PX 60→15): 实测自然左滑仅约 21px, 60px 几乎无法触发展开
+//   2026-07-23 抽屉关闭方向修正: 抽屉从左侧滑出, 关闭应为"左滑"推回(原误写右滑); 新增 DRAWER_CLOSE_PX=40
+// 手势阈值(固定 px, 不随屏幕/比例变化), 置于模块作用域供 Page 方法闭包访问
+// const SWIPE_OPEN_PX = 15    // 列表项左滑展开所需最小位移(px)
+// const SWIPE_CLOSE_PX = 15   // 展开项从"展开位"右拖超过该 px 即收起(以展开位为基准, 非以闭合位为基准)
+// const DRAWER_EDGE_PX = 60   // 列表区右滑开抽屉的横向位移阈值(px)
+// const DRAWER_CLOSE_PX = 40  // 抽屉内左滑关闭的横向位移阈值(px, 实测自然左滑约 54px)
+// const PANEL_CLOSE_PX = 150  // 面板上滑收起的位移阈值(px)
+
+
+const SWIPE_OPEN_PX = 15    // 列表项左滑展开所需最小位移(px)
+const SWIPE_CLOSE_PX = 15   // 展开项从"展开位"右拖超过该 px 即收起(以展开位为基准, 非以闭合位为基准)
+const DRAWER_EDGE_PX = 15   // 列表区右滑开抽屉的横向位移阈值(px)
+const DRAWER_CLOSE_PX = 15  // 抽屉内左滑关闭的横向位移阈值(px, 实测自然左滑约 54px)
+const PANEL_CLOSE_PX = 15  // 面板上滑收起的位移阈值(px)
+
 Page({
   data: {
     keywords: '',
     list: [],        // 全量列表(来自宿主)
     displayList: [], // 过滤后展示列表
     version: '',     // 当前小程序版本名(取自 wx.getSystemInfoSync.appVersion)
+    actionWidth: 0,  // 左滑操作区总宽度(px), 按屏幕宽度动态计算
+    swipeLock: false, // 横向滑动进行中锁定 scroll-view 垂直滚动, 避免原生滚动抢手势
     // 下拉面板状态
     panelHeight: 0,      // 面板可视高度(px)
     panelY: -2000,       // 面板 translateY(px), 关闭时为 -panelHeight
     panelOpacity: 0,     // 面板(含遮罩)透明度
     panelTransition: false, // 是否启用过渡动画(拖拽时关闭, 吸附时开启)
     panelOpen: false,
+    triggered: false, // 原生下拉刷新状态, 触发面板后置 false 收起刷新动画(否则 scroll-view 卡在顶部下拉位置)
     newAppId: '',
     newName: '',
     newPath: '',
@@ -39,21 +56,37 @@ Page({
     menuOpen: false,
   },
 
-  // 拖拽过程临时状态(不放进 data, 避免无谓渲染)
+  // 拖拽/手势临时状态(不放进 data, 避免无谓渲染)
+  _swipeX: 0,
+  _swipeStartVal: 0,
+  _swipeMoved: false,
+  _pageStartX: 0,
+  _pageStartY: 0,
   _drag: null,
 
   onLoad() {
     const that = this
-    // 取当前小程序版本号(宿主 SystemApi 在 getSystemInfoSync 中注入 appVersion)
+    // 取当前小程序版本号与状态栏高度(宿主 SystemApi 在 getSystemInfoSync 中注入 appVersion)
     try {
       const sys = (typeof wx.getSystemInfoSync === 'function') ? wx.getSystemInfoSync() : {}
-      that.setData({ version: sys.appVersion || '' })
-      that.setData({ statusBarHeight: sys.statusBarHeight || 0 })
       const h = sys.windowHeight || 600
-      that.setData({ panelHeight: h, panelY: -h })
+      that.setData({
+        version: sys.appVersion || '',
+        statusBarHeight: sys.statusBarHeight || 0,
+        panelHeight: h,
+        panelY: -h,
+        // 操作区总宽 320rpx(置顶160rpx + 删除160rpx), 转换为 px 供左滑位移 clamp 使用(按钮实际宽 320rpx)
+        actionWidth: Math.round((sys.windowWidth || 375) / 750 * 320),
+      })
     } catch (e) {
       console.error('[index] getSystemInfoSync fail:', e)
     }
+    that._fetchList()
+  },
+
+  // 从宿主获取小程序列表(宿主会屏蔽本会话已删除项), 作为列表唯一数据源
+  _fetchList() {
+    const that = this
     wx.extBridge({
       module: 'AppList',
       event: 'getList',
@@ -64,6 +97,7 @@ Page({
           path: it.path,
           avatar: it.name ? it.name.substring(0, 1) : '?',
           color: colorFromName(it.name || ''),
+          translateX: 0,
         }))
         that.setData({ list, displayList: filterList(list, that.data.keywords) })
       },
@@ -84,11 +118,188 @@ Page({
       module: 'AppList',
       event: 'launch',
       data: { appId },
-      success: () => {},
       fail: (err) => {
         console.error('[index] launch fail:', err)
       },
     })
+  },
+
+  // ===== 列表项左滑: 置顶 / 删除 =====
+  // 直接由 touch 事件(clientX/Y 差)计算位移并 apply 到 content 的 translateX,
+  // 不依赖 movable-view(其在 dimina 下 bindchange 回报的 x 恒为 0, 导致阈值与吸附全部失效);
+  // 纵向意图不干预(交给 scroll-view 原生滚动); 横向意图确定后锁定 scroll-view 垂直滚动, 避免抢手势/取消触摸
+  onSwipeTouchStart(e) {
+    // 每个触摸周期开始重置滑动状态, 避免上一轮滑动残留导致后续点击被吞
+    const t = e.touches[0]
+    this._sx = t ? t.clientX : 0
+    this._sy = t ? t.clientY : 0
+    this._startTranslate = this._lookupTranslateX(e.currentTarget.dataset.appid)
+    this._swipeWasOpen = this._startTranslate < 0   // 记录本次手势作用于的"当前项"是否原本展开
+    this._dir = null        // 'h' 横向 | 'v' 纵向 | null 未定
+    this._moved = false
+    this._curX = this._startTranslate
+  },
+
+  onSwipeTouchMove(e) {
+    const t = e.touches[0]
+    if (!t) return
+    const dx = t.clientX - this._sx
+    const dy = t.clientY - this._sy
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) this._moved = true
+    // 意图判定: 位移超过 8px 且横向为主才视为左滑; 否则交由原生滚动
+    if (this._dir === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      this._dir = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v'
+      if (this._dir === 'h' && !this.data.swipeLock) this.setData({ swipeLock: true })
+    }
+    if (this._dir !== 'h') return // 纵向滚动或尚未确定: 不干预
+    const appId = e.currentTarget.dataset.appid
+    // 跟随手指计算位移并约束在 [-actionWidth, 0]
+    this._curX = Math.max(-this.data.actionWidth, Math.min(0, this._startTranslate + dx))
+    this._setItemTranslateX(appId, this._curX)
+  },
+
+  onSwipeTouchEnd(e) {
+    const appId = e.currentTarget.dataset.appid
+    if (this.data.swipeLock) this.setData({ swipeLock: false })
+    if (this._dir === 'h') {
+      const { actionWidth } = this.data
+      const x = typeof this._curX === 'number' ? this._curX : 0
+      // 展开态(x 起点为负): 从展开位右拖超过 SWIPE_CLOSE_PX(px)即收起(以展开位为基准, 否则需几乎拖回原位才收起); 收起态: 左滑超过 SWIPE_OPEN_PX(px)才展开; 纯位置判定不认速度
+      const target = this._startTranslate < 0
+        ? (x > this._startTranslate + SWIPE_CLOSE_PX ? 0 : -actionWidth)
+        : (x < -SWIPE_OPEN_PX ? -actionWidth : 0)
+      if (target < 0) this._closeOthers(appId) // 打开时先关闭其它项, 保证最多一个展开
+      this._setItemTranslateX(appId, target)
+      // 横向手势落在"已展开项"上: 让位给该项自身的关闭, 抑制根容器开抽屉(仅针对当前项, 不影响其它项)
+      this._pageSuppressDrawer = this._swipeWasOpen
+      this._dir = null
+      return
+    }
+    // 非横向(纵向滚动或轻点): 不在松手处理点击, 交由 onSwipeTap
+    this._dir = null
+  },
+
+  onSwipeTap(e) {
+    if (this._moved) return // 横向滑动/纵向滚动后补发的 tap 不触发点击
+    const hasOpen = this.data.displayList.some((it) => it.translateX < 0)
+    if (hasOpen) {
+      this._closeAllSwipes()
+      return
+    }
+    this.onTapItem(e)
+  },
+
+  _lookupTranslateX(appId) {
+    const it = this.data.displayList.find((x) => x.appId === appId)
+    return it ? it.translateX : 0
+  },
+
+  // 点击列表空白(非操作按钮)区域: 若有展开项则收起(按钮 catchtap 不冒泡, 不受影响)
+  onListTap() {
+    const hasOpen = this.data.displayList.some((it) => it.translateX < 0)
+    if (hasOpen) this._closeAllSwipes()
+  },
+
+  // 列表滚动时自动收起展开项, 避免按钮跟着滚动显得突兀
+  onListScroll() {
+    const hasOpen = this.data.displayList.some((it) => it.translateX < 0)
+    if (hasOpen) this._closeAllSwipes()
+  },
+
+  // 页面级手势(挂根容器, 接收冒泡触摸): 列表右滑(以水平为主)打开左侧抽屉
+  // 垂直滚动因 dy 远大于 dx 不会误触发; 仅当本次右滑落在"已展开当前项"上才让位关闭该项(见 onSwipeTouchEnd), 不影响其它项
+  onPageTouchStart(e) {
+    const t = e.touches[0]
+    this._pageStartX = t ? t.clientX : 0
+    this._pageStartY = t ? t.clientY : 0
+    // 每个触摸周期重置: 是否抑制开抽屉由本次手势是否落在"已展开列表项"上决定(见 onSwipeTouchEnd),
+    // 而非"列表里任意项展开", 这样右滑未展开项仍可正常打开抽屉
+    this._pageSuppressDrawer = false
+  },
+
+  onPageTouchEnd(e) {
+    const t = e.changedTouches && e.changedTouches[0]
+    if (!t) return
+    const dx = t.clientX - this._pageStartX
+    const dy = t.clientY - this._pageStartY
+    const rightSwipe = dx > DRAWER_EDGE_PX && Math.abs(dx) > Math.abs(dy) * 1.5
+    // 抽屉已打开: 关闭由抽屉自身手势(onDrawerTouchEnd)处理, 此处不再抢手势(避免重复关闭/误判)
+    if (this.data.drawerOpen) return
+    // 本次横向手势落在"已展开"的当前列表项上: 仅用于关闭该项, 不触发开抽屉
+    if (this._pageSuppressDrawer) return
+    // 列表区右滑打开左侧抽屉
+    if (rightSwipe) this.openDrawer()
+  },
+
+  onTopItem(e) {
+    const appId = e.currentTarget.dataset.appid
+    const idx = this.data.list.findIndex((it) => it.appId === appId)
+    if (idx > 0) {
+      const item = this.data.list[idx]
+      const list = [item, ...this.data.list.slice(0, idx), ...this.data.list.slice(idx + 1)]
+      this.setData({ list, displayList: filterList(list, this.data.keywords) })
+    }
+    this._closeAllSwipes()
+    wx.showToast({ title: '已置顶', icon: 'success' })
+  },
+
+  onDeleteItem(e) {
+    const appId = e.currentTarget.dataset.appid
+    wx.showModal({
+      title: '确认删除',
+      content: '确定要删除这个小程序吗?',
+      confirmColor: '#FF4D4F',
+      success: (res) => {
+        if (res.confirm) {
+          this._doDelete(appId)
+        } else {
+          this._closeAllSwipes()
+        }
+      },
+    })
+  },
+
+  _doDelete(appId) {
+    // 乐观更新: 立即从本地列表移除, 给出即时反馈
+    const list = this.data.list.filter((it) => it.appId !== appId)
+    this.setData({ list, displayList: filterList(list, this.data.keywords) })
+    this._closeAllSwipes()
+    wx.showToast({ title: '已删除', icon: 'success' })
+    // 通知宿主真正删除小程序(内存屏蔽+清理解压目录, 不持久化), 成功后重新获取列表以同步宿主与前端
+    if (typeof wx.extBridge === 'function') {
+      wx.extBridge({
+        module: 'AppList',
+        event: 'remove',
+        data: { appId },
+        success: () => { this._fetchList() },
+        fail: () => {},
+      })
+    }
+  },
+
+  _setItemTranslateX(appId, x) {
+    // 仅路径更新被滑动那一项的 translateX, 避免 touchmove 每帧重建并序列化整个列表, 减少渲染开销
+    const li = this.data.list.findIndex((it) => it.appId === appId)
+    const di = this.data.displayList.findIndex((it) => it.appId === appId)
+    const patch = {}
+    if (li >= 0) patch[`list[${li}].translateX`] = x
+    if (di >= 0) patch[`displayList[${di}].translateX`] = x
+    this.setData(patch)
+  },
+
+  _closeAllSwipes() {
+    if (!this.data.displayList.some((it) => it.translateX < 0)) return
+    this.setData({
+      list: this.data.list.map((it) => ({ ...it, translateX: 0 })),
+      displayList: this.data.displayList.map((it) => ({ ...it, translateX: 0 })),
+    })
+  },
+
+  _closeOthers(exceptAppId) {
+    const apply = (arr) => arr.map((it) =>
+      (it.appId !== exceptAppId && it.translateX < 0 ? { ...it, translateX: 0 } : it)
+    )
+    this.setData({ list: apply(this.data.list), displayList: apply(this.data.displayList) })
   },
 
   // ===== 下拉面板: 原生 refresher 触发 + 面板自定义上滑关闭 =====
@@ -96,6 +307,8 @@ Page({
   // 不再自行抢 touch, 避免与原生滚动冲突; 面板内上滑关闭用自定义手势(catchtouch, role=panel)
   onRefresherRefresh() {
     // 原生下拉刷新触发: 打开添加小程序面板
+    // refresher 刷新态由 _setPanel 随面板生命周期管理(triggered = open),
+    // 面板打开期间保持刷新中(列表被遮罩覆盖无感), 关闭时收起, 避免 setTimeout 竞态导致下拉失效
     this._setPanel(true)
   },
 
@@ -104,6 +317,7 @@ Page({
     if (e.currentTarget.dataset.role !== 'panel') return
     if (!this.data.panelOpen) return
     const t = e.touches[0]
+    if (!t) return
     this._drag = {
       startY: t.clientY,
       baseY: this.data.panelY,
@@ -132,18 +346,18 @@ Page({
   onPullEnd(e) {
     const d = this._drag
     if (!d) return
+    const t = e.changedTouches && e.changedTouches[0]
+    if (!t) return
     this._drag = null
     this.setData({ panelTransition: true })
-    const h = this.data.panelHeight
-    const shown = (h + this.data.panelY) / h
-    // 平均速度(px/ms): >0 向下, <0 向上; 用于快速甩动手势
-    const v = (e.changedTouches[0].clientY - d.startY) / Math.max(1, Date.now() - d.time)
+    // 平均速度(px/ms): >0 向下, <0 向上; 用于快速甩动手势(已是 px 量级, 无需改比例)
+    const v = (t.clientY - d.startY) / Math.max(1, Date.now() - d.time)
     if (v < -0.4) {
       this._setPanel(false)         // 向上快速甩 -> 关闭
     } else if (v > 0.4) {
       this._setPanel(true)          // 向下快速甩 -> 打开
-    } else if (shown > 0.4) {
-      this._setPanel(true)          // 露出过半 -> 吸附打开
+    } else if (this.data.panelY > -PANEL_CLOSE_PX) {
+      this._setPanel(true)          // 上滑未超过 PANEL_CLOSE_PX -> 吸附打开
     } else {
       this._setPanel(false)         // 否则 -> 吸附关闭
     }
@@ -156,6 +370,7 @@ Page({
       panelY: open ? 0 : -h,
       panelOpacity: open ? 1 : 0,
       panelOpen: open,
+      triggered: open, // 面板打开期间保持 refresher 刷新态, 关闭时收起, 防止列表卡在顶部下拉位置
     })
   },
 
@@ -181,6 +396,7 @@ Page({
       path: newPath || '',
       avatar: name.substring(0, 1),
       color: colorFromName(name),
+      translateX: 0,
     }
     const list = [item, ...this.data.list]
     this.setData({
@@ -200,6 +416,21 @@ Page({
   },
   closeDrawer() {
     this.setData({ drawerOpen: false })
+  },
+  // 抽屉面板专属手势: 在抽屉遮罩(含抽屉面板)内右滑关闭抽屉, 不依赖根容器冒泡, 更稳健
+  onDrawerTouchStart(e) {
+    const t = e.touches[0]
+    this._drawerStartX = t ? t.clientX : 0
+    this._drawerStartY = t ? t.clientY : 0
+  },
+  onDrawerTouchEnd(e) {
+    const t = e.changedTouches && e.changedTouches[0]
+    if (!t) return
+    const dx = t.clientX - this._drawerStartX
+    const dy = t.clientY - this._drawerStartY
+    // 抽屉从左侧滑出, 关闭方向为"从右往左"推回; 横向为主且位移超阈值即关闭(不认速度, 纯位置判定)
+    const leftSwipe = dx < -DRAWER_CLOSE_PX && Math.abs(dx) > Math.abs(dy) * 1.5
+    if (leftSwipe) this.closeDrawer()
   },
   toggleMenu() {
     this.setData({ menuOpen: !this.data.menuOpen, drawerOpen: false })
@@ -235,10 +466,10 @@ Page({
   },
 })
 
-// 按关键字过滤(名称包含匹配)
+// 按关键字过滤(名称包含匹配), 过滤后重置所有项的滑动状态
 function filterList(list, keywords) {
-  if (!keywords) return list
-  return list.filter((it) => it.name.indexOf(keywords) !== -1)
+  const filtered = !keywords ? list : list.filter((it) => it.name.indexOf(keywords) !== -1)
+  return filtered.map((it) => ({ ...it, translateX: 0 }))
 }
 
 // 由名称生成稳定颜色(与宿主 Utils.generateColorFromName 一致)

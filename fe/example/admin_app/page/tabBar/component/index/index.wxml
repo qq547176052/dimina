@@ -1,18 +1,10 @@
 <!--page/tabBar/component/index/index.wxml-->
-<!--简介: 组件 Tab 首页视图, 展示宿主小程序列表, 点击拉起对应小程序-->
-<!--履历: 2026-07-21 由空页面填充为基础组件展示页-->
-<!--履历: 2026-07-21 增加跳转 max_image 按钮-->
-<!--履历: 2026-07-21 增加带推送参数跳转按钮-->
-<!--履历: 2026-07-21 精简为仅保留标题, 顶部预留 1/15 屏高留白给刘海-->
-<!--履历: 2026-07-22 改为小程序列表, 参考宿主 MainActivity 列表样式(头像+名称+搜索)-->
-<!--履历: 2026-07-22 页面底板(footer)展示当前小程序版本号(取自 wx.getSystemInfoSync appVersion)-->
-<!--履历: 2026-07-22 新增 QQ 式下拉面板: 顶部把手下拉唤出添加小程序页面, 可下拉关闭-->
-<!--履历: 2026-07-22 新增仿 QQ 顶栏: 左上角头像/昵称/在线状态(抽屉), 右上角加号(下拉菜单含扫一扫)-->
-<!--履历: 2026-07-22 优化下拉/上滑交互: 橡皮筋阻尼 + 速度甩动 + 点击展开 + 关闭按钮 + 方向修正-->
-<!--履历: 2026-07-22 沉浸式状态栏: navbar 顶部用 statusBarHeight(px) 预留系统状态栏, 避免与状态栏重叠-->
-<!--履历: 2026-07-22 下拉交互改为: 列表滚到顶继续下拉唤出面板, 面板整体上滑关闭(移除把手), 滚动增强-->
-<!--履历: 2026-07-23 修复下拉在 dimina(列表有内容)失效: 改用 scroll-view 原生 refresher(组件内置, 不与原生滚动抢手势) 触发面板; 面板上滑关闭仍用自定义 catchtouch -->
-<view class="page-wrap">
+<!--简介: 组件 Tab 首页视图, 展示宿主小程序列表, 支持左滑置顶/删除、右滑开抽屉、顶部下拉添加面板-->
+<!--履历: 2026-07-23 重写: 左滑用纯 touch 计算位移(弃用 movable-view); 右滑开抽屉挂根容器; 未展开时按钮层 opacity 隐藏防缝隙透出-->
+<view class="page-wrap"
+  bindtouchstart="onPageTouchStart"
+  bindtouchend="onPageTouchEnd"
+>
   <!-- 顶部导航栏: 仿 QQ, 左上角头像+昵称+在线状态(点开抽屉), 右上角加号(点开菜单) -->
   <view class="navbar" style="padding-top: calc({{statusBarHeight}}px + 16rpx);">
     <view class="nav-left" bindtap="openDrawer">
@@ -31,10 +23,12 @@
 
   <scroll-view
     class="page"
-    scroll-y
+    scroll-y="{{!swipeLock}}"
     refresher-enabled="{{true}}"
     refresher-default-style="none"
     bindrefresherrefresh="onRefresherRefresh"
+    refresher-triggered="{{triggered}}"
+    bindscroll="onListScroll"
   >
     <view class="search">
       <input
@@ -46,16 +40,28 @@
       />
     </view>
 
-    <view class="list">
+    <view class="list" bindtap="onListTap">
       <view
-        class="item"
+        class="swipe-item"
         wx:for="{{displayList}}"
         wx:key="appId"
         data-appid="{{item.appId}}"
-        bindtap="onTapItem"
+        bindtouchstart="onSwipeTouchStart"
+        bindtouchmove="onSwipeTouchMove"
+        bindtouchend="onSwipeTouchEnd"
+        bindtouchcancel="onSwipeTouchEnd"
+        bindtap="onSwipeTap"
       >
-        <view class="avatar" style="background:{{item.color}}">{{item.avatar}}</view>
-        <text class="name">{{item.name}}</text>
+        <!-- 操作按钮置于内容层之下(右侧), 内容层左移时露出的即按钮;
+             左滑位移由 onSwipeTouchMove 直接写入 item.translateX(px), 不再依赖 movable-view -->
+        <view class="swipe-actions {{item.translateX < 0 ? 'open' : ''}}">
+          <view class="swipe-btn top" data-appid="{{item.appId}}" catchtap="onTopItem">置顶</view>
+          <view class="swipe-btn del" data-appid="{{item.appId}}" catchtap="onDeleteItem">删除</view>
+        </view>
+        <view class="swipe-content {{swipeLock ? 'no-anim' : ''}}" style="transform: translateX({{item.translateX}}px);">
+          <view class="avatar" style="background:{{item.color}}">{{item.avatar}}</view>
+          <text class="name">{{item.name}}</text>
+        </view>
       </view>
     </view>
 
@@ -111,7 +117,7 @@
   </view>
 
   <!-- 左侧抽屉: 点击左上角头像/昵称弹出 -->
-  <view class="drawer-mask {{drawerOpen ? 'show' : ''}}" bindtap="closeDrawer">
+  <view class="drawer-mask {{drawerOpen ? 'show' : ''}}" bindtap="closeDrawer" bindtouchstart="onDrawerTouchStart" bindtouchend="onDrawerTouchEnd">
     <view class="drawer {{drawerOpen ? 'open' : ''}}" catchtap="noop">
       <view class="drawer-profile">
         <view class="drawer-avatar">{{avatarText}}</view>
