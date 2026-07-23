@@ -4,7 +4,9 @@
 <!--履历: 2026-07-21 按推送字段重构界面, 仅保留 标题/内容/全景图/人脸图, 移除返回按钮与调试区-->
 <!--履历: 2026-07-21 排序调整为 标题/内容/人脸图/全景图, 整体底部对齐, 顶部留 1/15 屏高外边距-->
 <!--履历: 2026-07-21 内容超出一屏时默认滚动到底部(scroll-into-view), 内层 flex 底部对齐避免顶部被裁-->
-<!--履历: 2026-07-22 全景图加载失败增加点击重试按钮; 点击全景图打开自建放大层(movable 双指缩放+拖动+点击关闭)-->
+<!--履历: 2026-07-22 全景图加载失败增加点 击重试按钮; 点击全景图打开自建放大层(movable 双指缩放+拖动+点击关闭)-->
+<!--履历: 2026-07-22 放大层改用 movable-view scale+out-of-bounds, 放大后可自由拖动; 关闭按钮加大并下移左移-->
+<!--履历: 2026-07-23 放大层改自定义手势(单指拖动+双指缩放), 去掉点击图片关闭避免误触, 仅点×关闭-->
 <scroll-view class="page" scroll-y scroll-into-view="{{scrollIntoView}}" wx:if="{{received}}">
   <view class="inner">
     <view class="card head">
@@ -40,16 +42,23 @@
   <text>未接收到推送参数</text>
 </view>
 
-<!-- 自建全景图放大层: 双指缩放, 拖动查看, 点击空白/按钮关闭 -->
-<view class="preview-mask" wx:if="{{preview}}" bindtap="closePreview">
-  <movable-area class="preview-area" scale-area bindtap="closePreview">
-    <movable-view class="preview-mv" direction="all" scale scale-min="1" scale-max="4">
-      <view class="preview-rotate-box" style="transform: rotate({{rotate}}deg);">
-        <image class="preview-img" src="{{panoImage}}" mode="widthFix"></image>
-      </view>
-    </movable-view>
-  </movable-area>
+<!-- 自建全景图放大层: 双指缩放, 单指拖动查看, 仅点×关闭(避免误触) -->
+<view class="preview-mask" wx:if="{{preview}}">
+  <view
+    class="preview-stage"
+    catchtouchstart="onImgTouchStart"
+    catchtouchmove="onImgTouchMove"
+    catchtouchend="onImgTouchEnd"
+    catchtouchcancel="onImgTouchEnd"
+  >
+    <image
+      class="preview-img {{imgAnim ? 'anim' : ''}}"
+      src="{{panoImage}}"
+      mode="widthFix"
+      style="transform: translate({{imgX}}px, {{imgY}}px) scale({{imgScale}}) rotate({{rotate}}deg);"
+    ></image>
+  </view>
   <view class="preview-close" catchtap="closePreview">×</view>
   <view class="preview-rotate" catchtap="onRotate">旋转</view>
-  <text class="preview-tip">双指缩放 · 拖动查看 · 点空白处关闭</text>
+  <text class="preview-tip">双指缩放 · 单指拖动 · 点×关闭</text>
 </view>

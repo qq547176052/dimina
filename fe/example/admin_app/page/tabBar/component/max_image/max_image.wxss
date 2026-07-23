@@ -7,6 +7,8 @@
 /* 履历: 2026-07-21 底部对齐移至内层 .inner, 长内容可正常滚动且默认滚到底部 */
 /* 履历: 2026-07-22 .inner 由底部对齐改为上下居中(justify-content: center) */
 /* 履历: 2026-07-22 增加加载失败重试按钮与自建全景图放大层样式 */
+/* 履历: 2026-07-22 放大层 movable-view 加 out-of-bounds 支持放大后拖动; 关闭按钮 96rpx 并下移左移 */
+/* 履历: 2026-07-23 放大层弃用 movable, 改 preview-stage 承接自定义手势, 图片由 inline transform 驱动 */
 .page {
   height: 100vh;
   box-sizing: border-box;
@@ -98,28 +100,24 @@
   z-index: 999;
 }
 
-.preview-area {
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
-}
-
-.preview-mv {
-  width: 100vw;
-  height: 100vh;
+.preview-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
 .preview-img {
   width: 100vw;
+  will-change: transform;
 }
 
-.preview-rotate-box {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.preview-img.anim {
   transition: transform 0.25s ease-out;
 }
 
@@ -141,15 +139,16 @@
 
 .preview-close {
   position: fixed;
-  top: calc(env(safe-area-inset-top) + 24rpx);
-  right: 32rpx;
-  width: 72rpx;
-  height: 72rpx;
-  line-height: 64rpx;
-  text-align: center;
-  font-size: 56rpx;
+  top: calc(env(safe-area-inset-top) + 80rpx);
+  right: 72rpx;
+  width: 96rpx;
+  height: 96rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 64rpx;
   color: #fff;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.5);
   border-radius: 50%;
   z-index: 1000;
 }
