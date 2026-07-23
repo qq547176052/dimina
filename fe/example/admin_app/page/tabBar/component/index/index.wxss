@@ -14,7 +14,9 @@
   flex: 1;
   box-sizing: border-box;
   overflow: hidden;
-  padding: calc(env(safe-area-inset-top) + 32rpx) 24rpx 24rpx;
+  /* 顶部间距: 系统状态栏已由 navbar(statusBarHeight) 预留, 此处不再叠加 env(safe-area-inset-top),
+     否则搜索条会整体下移一整条状态栏高度, 与导航栏间距过大 */
+  padding: 24rpx 24rpx 24rpx;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -183,6 +185,7 @@
 /* 履历: 2026-07-22 沉浸式状态栏: navbar 顶部由内联 statusBarHeight 预留, 不再用 safe-area-inset-top */
 /* 履历: 2026-07-22 下拉交互改为: 列表滚到顶下拉唤出 / 面板整体上滑关闭(移除把手) / 滚动增强 */
 /* 履历: 2026-07-22 导航栏加高: 状态栏区域 +16rpx, navbar 内容区与头像字号放大, 菜单下落位置同步下移 */
+/* 履历: 2026-07-23 搜索条与导航栏间距合理化: 去掉 .page 顶部重复的安全区内边距(状态栏已由 navbar 预留), 改 24rpx 对齐 navbar 底距 */
 /* 顶部导航栏(顶部状态栏高度由内联 style 的 statusBarHeight+16rpx 预留, 不再用 safe-area, 避免无刘海设备重叠) */
 .navbar {
   flex-shrink: 0;
