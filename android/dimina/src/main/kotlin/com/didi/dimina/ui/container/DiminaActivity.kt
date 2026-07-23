@@ -533,7 +533,17 @@ class DiminaActivity : ComponentActivity() {
                 } else false
 
                 if (shouldExtract) {
-                    if (Utils.unzipAssets(this@DiminaActivity, "jsapp/$appId/$appId.zip", "jsapp/$appId")) {
+                    // 合并: 采用上游 atomic zip(requiredPaths 校验关键文件完整性), 版本门控保留 bundledVersion(覆盖安装生效)
+                    if (Utils.unzipAssets(
+                            this@DiminaActivity,
+                            "jsapp/$appId/$appId.zip",
+                            "jsapp/$appId",
+                            requiredPaths = listOf(
+                                "main/app-config.json",
+                                "main/logic.js",
+                            ),
+                        )
+                    ) {
                         VersionUtils.setAppVersion(appId, bundledVersion)
                         LogUtils.d(tag, "Mini program extraction completed successfully")
                     } else {

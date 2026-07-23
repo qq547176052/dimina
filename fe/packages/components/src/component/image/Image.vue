@@ -164,9 +164,11 @@ function setupLazyLoading() {
 		return
 	}
 	const margin = Math.max(Number(props.lazyLoadMargin) || 0, 0)
+	const verticalMargin = margin * window.innerHeight
+	const horizontalMargin = margin * window.innerWidth
 	intersectionObserver = new IntersectionObserver((entries) => {
 		if (entries.some(entry => entry.isIntersecting || entry.intersectionRatio > 0)) showImage()
-	}, { rootMargin: `${margin * 100}vh ${margin * 100}vw` })
+	}, { rootMargin: `${verticalMargin}px ${horizontalMargin}px` })
 	intersectionObserver.observe(conRef.value)
 }
 

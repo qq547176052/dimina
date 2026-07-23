@@ -27,9 +27,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
-import java.util.zip.ZipInputStream
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 
@@ -142,67 +139,29 @@ object Utils {
      * @param keep Whether to keep the existing files in the target directory
      * @return true if extraction was successful, false otherwise
      */
-    fun unzipAssets(context: Context, zipFileName: String, target: String, keep: Boolean = false): Boolean {
-        // Create directory for the mini program if it doesn't exist
+    fun unzipAssets(
+        context: Context,
+        zipFileName: String,
+        target: String,
+        keep: Boolean = false,
+        requiredPaths: List<String> = emptyList(),
+    ): Boolean {
         val miniProgramDir = File(context.filesDir, target)
-        if (miniProgramDir.exists()) {
-            if (keep) {
-                LogUtils.d(TAG, "Existing directory for mini program: $zipFileName")
-                return false
-            } else {
-                miniProgramDir.deleteRecursively() // Clean up existing files
-            }
+        if (miniProgramDir.exists() && keep) {
+            LogUtils.d(TAG, "Existing directory for mini program: $zipFileName")
+            return false
         }
-        miniProgramDir.mkdirs()
 
-        // Get the zip file from assets
         LogUtils.d(TAG, "Extracting from assets: $zipFileName")
-
-        try {
-            // Open the zip file from assets
-            context.assets.open(zipFileName).use { inputStream ->
-                ZipInputStream(inputStream).use { zipInputStream ->
-                    var zipEntry = zipInputStream.nextEntry
-                    val buffer = ByteArray(1024)
-
-                    // Extract all files from the zip
-                    while (zipEntry != null) {
-                        val entryName = zipEntry.name
-                        val newFile = File(miniProgramDir, entryName)
-
-                        // Create directories if needed
-                        if (zipEntry.isDirectory) {
-                            newFile.mkdirs()
-                        } else {
-                            // Create parent directories if they don't exist
-                            newFile.parentFile?.mkdirs()
-
-                            // Extract the file
-                            FileOutputStream(newFile).use { fileOutputStream ->
-                                var len: Int
-                                while (zipInputStream.read(buffer).also { len = it } > 0) {
-                                    fileOutputStream.write(buffer, 0, len)
-                                }
-                            }
-                        }
-
-                        zipInputStream.closeEntry()
-                        zipEntry = zipInputStream.nextEntry
-                    }
-                }
-            }
-
-            return true
-
-        } catch (e: IOException) {
-            LogUtils.e(TAG, "Error extracting: ${e.message}")
-            e.printStackTrace()
-            return false
-        } catch (e: Exception) {
-            LogUtils.e(TAG, "Unexpected error: ${e.message}")
-            e.printStackTrace()
-            return false
+        val installed = AtomicZipInstaller.install(
+            inputProvider = { context.assets.open(zipFileName) },
+            targetDir = miniProgramDir,
+            requiredPaths = requiredPaths,
+        )
+        if (!installed) {
+            LogUtils.e(TAG, "Failed to extract and validate asset: $zipFileName")
         }
+        return installed
     }
 
     // Mini program system APIs expect CSS/logical px, not Android physical px.

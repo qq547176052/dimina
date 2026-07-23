@@ -39,6 +39,9 @@ import com.didi.dimina.common.Utils
 import com.didi.dimina.common.VersionUtils
 import com.didi.dimina.engine.qjs.JSValue
 import com.didi.dimina.ui.container.DiminaActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
 
@@ -54,6 +57,7 @@ class MiniApp private constructor() {
     private val apiRegistry = ApiRegistry()
     private val bluetoothApi = BluetoothApi()
     private val localNetworkApi = LocalNetworkApi()
+    private val updateCheckRegistry = UpdateCheckRegistry()
 
     // Map to store JsCore instances for each MiniProgram
     private val jsCoreMap = mutableMapOf<String, JsCore>()
@@ -102,6 +106,20 @@ class MiniApp private constructor() {
         jsCoreMap[appId]?.postMessage("onUpdateStatusChange", mapOf("event" to event))
     }
 
+    fun startUpdateCheckIfNeeded(context: Context, miniProgram: MiniProgram) {
+        if (!updateCheckRegistry.begin(miniProgram.appId)) {
+            return
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            RemoteUpdateManager.checkForUpdate(
+                context = context.applicationContext,
+                miniProgram = miniProgram,
+                notify = { event -> postUpdateStatus(miniProgram.appId, event) },
+            )
+        }
+    }
+
     /**
      * Get or create a JsCore instance for a specific MiniProgram
      *
@@ -142,6 +160,10 @@ class MiniApp private constructor() {
                                             context,
                                             "jssdk/main.zip",
                                             "jssdk/$newVersionCode",
+                                            requiredPaths = listOf(
+                                                "main/assets/service.js",
+                                                "main/pageFrame.html",
+                                            ),
                                         )
                                     ) {
                                         VersionUtils.setJSVersion(newVersionCode)
@@ -379,6 +401,7 @@ class MiniApp private constructor() {
      * @param appId The ID of the MiniProgram to clear resources for
      */
     fun clear(appId: String) {
+        updateCheckRegistry.reset(appId)
         // 清理第三方扩展的持续订阅
         apiRegistry.clearExtSubscriptions()
         bluetoothApi.clearApp(appId)
@@ -401,6 +424,7 @@ class MiniApp private constructor() {
      * Clears all API resources and callbacks for all MiniPrograms
      */
     fun clearAll() {
+        updateCheckRegistry.resetAll()
         // Destroy all JsCore instances
         jsCoreMap.forEach { (appId, jsCore) ->
             LogUtils.d(tag, "Destroying JsCore for appId: $appId")

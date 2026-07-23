@@ -66,6 +66,7 @@ afterEach(() => {
 	document.documentElement.style.fontSize = ''
 	document.documentElement.style.backgroundColor = ''
 	vi.useRealTimers()
+	vi.unstubAllGlobals()
 })
 
 describe('exparser component alignment', () => {
@@ -107,6 +108,37 @@ describe('exparser component alignment', () => {
 		expect(preloader).not.toBeNull()
 		expect(preloaderRules).toContain('opacity: 0')
 		expect(preloaderRules).not.toContain('position: absolute')
+	})
+
+	it('converts lazy-load screen margins to pixels before observing', async () => {
+		let intersectionCallback
+		const observers = []
+		class IntersectionObserverMock {
+			constructor(callback, options) {
+				intersectionCallback = callback
+				this.options = options
+				this.disconnect = vi.fn()
+				this.observe = vi.fn()
+				observers.push(this)
+			}
+		}
+		vi.stubGlobal('innerHeight', 800)
+		vi.stubGlobal('innerWidth', 400)
+		vi.stubGlobal('IntersectionObserver', IntersectionObserverMock)
+
+		const { host } = mountComponent(Image, { lazyLoad: true, src: '/lazy.png' })
+		const image = host.querySelector('img')
+
+		expect(observers).toHaveLength(1)
+		expect(observers[0].options).toEqual({ rootMargin: '1600px 800px' })
+		expect(observers[0].observe).toHaveBeenCalledWith(host.querySelector('.dd-image'))
+		expect(image.getAttribute('src')).toBe('')
+
+		intersectionCallback([{ intersectionRatio: 1, isIntersecting: true }])
+		await nextTick()
+
+		expect(image.getAttribute('src')).toBe('/lazy.png')
+		expect(observers[0].disconnect).toHaveBeenCalledOnce()
 	})
 
 	it('renders a real canvas with the canvas selector contract and slot overlay', () => {
