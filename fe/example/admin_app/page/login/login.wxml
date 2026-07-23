@@ -1,0 +1,27 @@
+<!--page/login/login.wxml-->
+<!--简介: 登录页视图, 账号密码输入 + 登录按钮, 风格与首页一致(微信绿)-->
+<!--履历: 2026-07-23 新建-->
+<view class="login-wrap" style="padding-top: calc({{statusBarHeight}}px + 120rpx);">
+  <view class="login-logo">管</view>
+  <text class="login-title">管理后台</text>
+  <text class="login-sub">请登录后使用</text>
+
+  <view class="login-form">
+    <input
+      class="login-input"
+      placeholder="账号"
+      placeholder-class="login-ph"
+      value="{{account}}"
+      bindinput="onAccountInput"
+    />
+    <input
+      class="login-input"
+      placeholder="密码"
+      placeholder-class="login-ph"
+      password="{{true}}"
+      value="{{password}}"
+      bindinput="onPasswordInput"
+    />
+    <button class="login-btn {{loading ? 'disabled' : ''}}" bindtap="onLogin">{{loading ? '登录中...' : '登 录'}}</button>
+  </view>
+</view>

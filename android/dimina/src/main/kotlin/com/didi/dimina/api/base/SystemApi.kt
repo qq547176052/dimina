@@ -124,8 +124,9 @@ class SystemApi : BaseApiHandler() {
     private fun getSystemInfo(currentActivity: Activity): JSONObject {
         val info = Utils.getMiniProgramSystemInfo(currentActivity)
         if (currentActivity is DiminaActivity) {
-            info.put("appVersion", currentActivity.getMiniProgram().versionName)
-            info.put("appVersionCode", currentActivity.getMiniProgram().versionCode)
+            // 返回沙盒真实已安装版本, 使更新生效后版本号随之变化(原取静态注册版本, 更新后不变)
+            info.put("appVersion", currentActivity.installedVersionName)
+            info.put("appVersionCode", currentActivity.installedVersionCode)
         }
         return info
     }

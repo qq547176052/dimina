@@ -455,3 +455,70 @@
 .menu-item-text {
   color: #1F2329;
 }
+
+/* 更新进度覆盖层 */
+.update-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.update-mask.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.update-card {
+  width: 76%;
+  background: #FFFFFF;
+  border-radius: 20rpx;
+  padding: 48rpx 40rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.update-title {
+  font-size: 30rpx;
+  color: #1F2329;
+  margin-bottom: 32rpx;
+}
+
+.update-bar {
+  width: 100%;
+  height: 16rpx;
+  background: #EEEEEE;
+  border-radius: 8rpx;
+  overflow: hidden;
+}
+
+.update-bar-inner {
+  height: 100%;
+  background: #07C160;
+  border-radius: 8rpx;
+  transition: width 0.2s ease;
+}
+
+/* 未知进度(percent<0): 100% 宽 + 动画, 表达不确定态 */
+.update-bar-inner.indeterminate {
+  width: 100% !important;
+  opacity: 0.5;
+  animation: update-indeterminate 1s ease-in-out infinite;
+}
+
+@keyframes update-indeterminate {
+  0% { opacity: 0.3; }
+  50% { opacity: 0.7; }
+  100% { opacity: 0.3; }
+}

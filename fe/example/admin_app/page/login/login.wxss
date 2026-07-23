@@ -1,0 +1,72 @@
+/* page/login/login.wxss */
+/* 简介: 登录页样式, 居中卡片式表单, 主色与首页抽屉一致(#07C160) */
+/* 履历: 2026-07-23 新建 */
+.login-wrap {
+  min-height: 100vh;
+  background: #F8F8F8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.login-logo {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 32rpx;
+  background: #07C160;
+  color: #FFFFFF;
+  font-size: 64rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-title {
+  margin-top: 32rpx;
+  font-size: 40rpx;
+  font-weight: 600;
+  color: #1F2329;
+}
+
+.login-sub {
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: #9AA0A6;
+}
+
+.login-form {
+  width: 100%;
+  padding: 80rpx 64rpx 0;
+  box-sizing: border-box;
+}
+
+.login-input {
+  height: 96rpx;
+  background: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 0 32rpx;
+  font-size: 30rpx;
+  color: #1F2329;
+  margin-bottom: 28rpx;
+}
+
+.login-ph {
+  color: #B8BDC4;
+}
+
+.login-btn {
+  margin-top: 24rpx;
+  height: 96rpx;
+  line-height: 96rpx;
+  border-radius: 16rpx;
+  background: #07C160;
+  color: #FFFFFF;
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.login-btn.disabled {
+  opacity: 0.6;
+}

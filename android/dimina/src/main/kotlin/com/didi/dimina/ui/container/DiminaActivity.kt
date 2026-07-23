@@ -1753,7 +1753,39 @@ class DiminaActivity : ComponentActivity() {
         coldRestartMiniProgram(updatedMiniProgram)
     }
 
-    private fun coldRestartMiniProgram(program: MiniProgram) {
+    // 关小程序 -> 解压替换沙盒 -> 冷重启: 复用官方"重新进入小程序"(coldRestartMiniProgram),
+    // 在 [beforeRelaunch] 钩子里替换沙盒, 此刻小程序已关闭(未运行), 彻底避开运行期替换沙盒的 ANR/卡死。
+    // 供 UpMiniApp 更新流程在用户确认后调用(主线程)。
+    fun applyUpdateWithInstall(onInstall: () -> Unit) {
+        val entryPagePath = getDefaultEntryPagePath() ?: miniProgram.path
+        val updatedMiniProgram = miniProgram.copy(root = true, path = entryPagePath)
+        coldRestartMiniProgram(updatedMiniProgram) { onInstall() }
+    }
+
+    // 供 UpMiniApp 在小程序关闭(onActivityDestroyed)时获取 appId, 触发本地更新包解压替换沙盒
+    val appId: String get() = miniProgram.appId
+
+    // 真实已安装(沙盒)版本: 优先取沙盒根 config.json(更新流程写入的完整远程配置, 含 versionName),
+    // 兜底注册信息。getSystemInfoSync.appVersion 应反映此值, 而非静态注册版本(否则更新后版本号不变)。
+    val installedVersionName: String
+        get() {
+            val f = File(filesDir, "jsapp/${miniProgram.appId}/config.json")
+            if (f.isFile) {
+                val v = runCatching { JSONObject(f.readText()).optString("versionName", "") }.getOrNull()
+                if (!v.isNullOrBlank()) return v
+            }
+            return miniProgram.versionName
+        }
+
+    // 真实已安装(沙盒)版本号: 优先取 VersionUtils(更新流程写入), 兜底注册信息
+    val installedVersionCode: Int
+        get() {
+            val stored = VersionUtils.getAppVersion(miniProgram.appId)
+            if (stored > 0) return stored
+            return miniProgram.versionCode
+        }
+
+    private fun coldRestartMiniProgram(program: MiniProgram, beforeRelaunch: (() -> Unit)? = null) {
         // Re-enter is an app-level reload, not wx.reLaunch: destroy the shared
         // JS runtime and transient API resources so the new root Activity runs
         // the complete initialization and loading flow again.
@@ -1762,6 +1794,7 @@ class DiminaActivity : ComponentActivity() {
             activity.finish()
         }
         miniApp.clear(miniProgram.appId)
+        beforeRelaunch?.invoke() // 重启前钩子(如更新安装时替换沙盒), 此刻小程序已关闭
         DiminaActivity.launch(this, program)
     }
 

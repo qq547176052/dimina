@@ -25,6 +25,7 @@ import org.json.JSONObject
  *   2026-07-22 改用 ComponentActivity 基类, 在拉起默认小程序前先申请 POST_NOTIFICATIONS 权限
  *   2026-07-23 AppList 新增 remove 事件: 小程序首页左滑删除时直接删除(内存屏蔽+清理解压目录), 不持久化, 列表重新获取
  *   2026-07-23 整理: onCreate 统一经 registerExtensions() 注册前台 Activity 跟踪与 AppList 扩展模块
+ *   2026-07-23 注册 MiniAppUpdate 扩展模块(UpMiniApp): 小程序经 wx.extBridge 检查更新, 更新源为 git 仓库
  */
 class MainActivity : ComponentActivity() {
 
@@ -49,9 +50,9 @@ class MainActivity : ComponentActivity() {
 
     // 拉起默认小程序(名称置为 " ")后结束启动页
     private fun launchDefaultMiniProgram() {
-        val miniProgram = Dimina.getInstance().getMiniProgram(AppConfig.DEFAULT_APP_ID)
+        val miniProgram = Dimina.getInstance().getMiniProgram(AppConfig.MiniApp.DEFAULT_APP_ID)
         if (miniProgram == null) {
-            LogUtils.e(TAG, "启动失败: 默认小程序 appId=${AppConfig.DEFAULT_APP_ID} 未读取到配置")
+            LogUtils.e(TAG, "启动失败: 默认小程序 appId=${AppConfig.MiniApp.DEFAULT_APP_ID} 未读取到配置")
             finish()
             return
         }
@@ -66,10 +67,11 @@ class MainActivity : ComponentActivity() {
         finish()
     }
 
-    // 统一注册入口: 前台 Activity 跟踪 + AppList 扩展模块(列表/拉起/删除)
+    // 统一注册入口: 前台 Activity 跟踪 + AppList 扩展模块(列表/拉起/删除) + 小程序检查更新模块
     private fun registerExtensions() {
         registerActivityLifecycle()
         registerAppListModule()
+        UpMiniApp.register(this)
     }
 
     // 跟踪前台 Activity, 供 AppList 扩展模块拉起(其他)小程序使用
@@ -112,7 +114,7 @@ class MainActivity : ComponentActivity() {
                     val arr = JSONArray()
                     for (mp in getMiniProgramsList()) {
                         // 排除清单内的小程序, 以及已删除(隐藏)的小程序
-                        if (mp.appId in AppConfig.EXCLUDED_LIST_APP_IDS) continue
+                        if (mp.appId in AppConfig.AppList.EXCLUDED_APP_IDS) continue
                         if (mp.appId in deletedAppIds) continue
                         arr.put(JSONObject().apply {
                             put("appId", mp.appId)
@@ -135,6 +137,9 @@ class MainActivity : ComponentActivity() {
                     } else {
                         val mp = Dimina.getInstance().getMiniProgram(appId)
                         if (mp != null && currentActivity != null) {
+                            // 统一更新策略: 启动小程序即后台检查版本并下载新版本压缩包到落盘缓存(仅写缓存, 不动沙盒);
+                            // 小程序关闭时(UpMiniApp 生命周期钩子)若下载完成则解压替换沙盒生效。
+                            UpMiniApp.backgroundCheckAndDownload(appId, this)
                             Dimina.getInstance().startMiniProgram(currentActivity!!, mp)
                             callback.onSuccess(JSONObject())
                         } else {

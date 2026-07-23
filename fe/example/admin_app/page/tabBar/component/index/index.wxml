@@ -1,6 +1,8 @@
 <!--page/tabBar/component/index/index.wxml-->
 <!--简介: 组件 Tab 首页视图, 展示宿主小程序列表, 支持左滑置顶/删除、右滑开抽屉、顶部下拉添加面板-->
 <!--履历: 2026-07-23 重写: 左滑用纯 touch 计算位移(弃用 movable-view); 右滑开抽屉挂根容器; 未展开时按钮层 opacity 隐藏防缝隙透出-->
+<!--履历: 2026-07-23 抽屉"我的收藏/设置"合并为"检查更新", 接入 wx.getUpdateManager() 触发小程序远程更新-->
+<!--履历: 2026-07-23 新增更新进度覆盖层: 进度条实时展示宿主 MiniAppUpdate.progress 上报的真实下载/安装百分比, 未知时走不确定态-->
 <view class="page-wrap"
   bindtouchstart="onPageTouchStart"
   bindtouchend="onPageTouchEnd"
@@ -125,8 +127,7 @@
         <text class="drawer-status">{{onlineStatus}}</text>
       </view>
       <view class="drawer-menu">
-        <view class="drawer-item" bindtap="onDrawerItem" data-key="favorite">我的收藏</view>
-        <view class="drawer-item" bindtap="onDrawerItem" data-key="setting">设置</view>
+        <view class="drawer-item" bindtap="onDrawerItem" data-key="update">检查更新</view>
         <view class="drawer-item" bindtap="onDrawerItem" data-key="exit">退出登录</view>
       </view>
     </view>
@@ -140,6 +141,16 @@
       </view>
       <view class="menu-item" bindtap="onMenuAddFriend">
         <text class="menu-item-text">添加好友</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 更新进度覆盖层: 检查/下载/安装阶段, 进度条实时展示宿主上报的真实百分比 -->
+  <view class="update-mask {{showProgress ? 'show' : ''}}">
+    <view class="update-card">
+      <text class="update-title">{{updateStage === 'install' ? '安装中...' : (updateStage === 'check' ? '检查更新中...' : (updatePercent >= 0 ? '下载中 ' + updatePercent + '%' : '下载中...'))}}</text>
+      <view class="update-bar">
+        <view class="update-bar-inner {{updatePercent < 0 ? 'indeterminate' : ''}}" style="width: {{updatePercent < 0 ? 100 : updatePercent}}%;"></view>
       </view>
     </view>
   </view>

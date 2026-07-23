@@ -13,6 +13,11 @@
 //   2026-07-23 关闭判定改以"展开位"为基准(原以闭合位为基准需几乎拖回原位才收起, 右滑易吸附回开); SWIPE_CLOSE_PX 15→20
 //   2026-07-23 展开阀值调小(SWIPE_OPEN_PX 60→15): 实测自然左滑仅约 21px, 60px 几乎无法触发展开
 //   2026-07-23 抽屉关闭方向修正: 抽屉从左侧滑出, 关闭应为"左滑"推回(原误写右滑); 新增 DRAWER_CLOSE_PX=40
+//   2026-07-23 接入登录: 顶栏/抽屉昵称头像取登录账号(storage.userName); 抽屉"退出登录"清 token 后 reLaunch 回登录页
+//   2026-07-23 抽屉"我的收藏/设置"合并为"检查更新", 接入 wx.getUpdateManager() 触发小程序远程更新(配合宿主 updateManifestUrl)
+//   2026-07-23 检查更新改经 wx.extBridge(MiniAppUpdate) 触发宿主从 git 仓库更新; 首页手动流程分三步:
+//               check 比对版本 -> 确认下载(download, progress 进度条实时展示) -> 确认重启(install: 关闭小程序->解压替换沙盒->冷重启)
+//   2026-07-23 下载/校验在运行期完成(只写暂存不动沙盒), 解压替换延后到小程序关闭后, 避开运行期替换卡死的 ANR
 // 手势阈值(固定 px, 不随屏幕/比例变化), 置于模块作用域供 Page 方法闭包访问
 // const SWIPE_OPEN_PX = 15    // 列表项左滑展开所需最小位移(px)
 // const SWIPE_CLOSE_PX = 15   // 展开项从"展开位"右拖超过该 px 即收起(以展开位为基准, 非以闭合位为基准)
@@ -54,6 +59,10 @@ Page({
     // 抽屉与下拉菜单
     drawerOpen: false,
     menuOpen: false,
+    // 更新进度: 覆盖层显隐/阶段/百分比(percent=-1 表示未知, 走不确定态)
+    showProgress: false,
+    updateStage: 'check',
+    updatePercent: 0,
   },
 
   // 拖拽/手势临时状态(不放进 data, 避免无谓渲染)
@@ -81,7 +90,29 @@ Page({
     } catch (e) {
       console.error('[index] getSystemInfoSync fail:', e)
     }
+    // 顶栏/抽屉昵称与头像取登录账号(登录页写入 storage)
+    try {
+      const userName = wx.getStorageSync('userName')
+      if (userName) that.setData({ nickName: userName, avatarText: userName.substring(0, 1).toUpperCase() })
+    } catch (e) {}
+    // 订阅宿主更新进度(extOnBridge 持续推送): 检查/下载/安装阶段的真实百分比
+    if (typeof wx.extOnBridge === 'function') {
+      wx.extOnBridge({
+        module: 'MiniAppUpdate',
+        event: 'progress',
+        callBack: (res) => that.onUpdateProgress(res),
+      })
+    }
     that._fetchList()
+  },
+
+  // 更新进度回调: 由宿主 downloadZip 按字节/总大小流式上报, 实时刷新进度条
+  onUpdateProgress(res) {
+    if (!res) return
+    this.setData({
+      updateStage: res.stage || 'download',
+      updatePercent: typeof res.percent === 'number' ? res.percent : -1,
+    })
   },
 
   // 从宿主获取小程序列表(宿主会屏蔽本会话已删除项), 作为列表唯一数据源
@@ -444,7 +475,111 @@ Page({
   onDrawerItem(e) {
     const key = e.currentTarget.dataset.key
     this.setData({ drawerOpen: false })
+    if (key === 'exit') {
+      this._logout()
+      return
+    }
+    if (key === 'update') {
+      this.onCheckUpdate()
+      return
+    }
     wx.showToast({ title: `点击: ${key}`, icon: 'none' })
+  },
+
+  // 检查更新(首页 admin_app 手动流程):
+  //   1) check   : 仅比对版本号
+  //   2) 确认下载 -> download: 宿主后台下载并校验到暂存(运行期只写 cache, 不动沙盒),
+  //      经 progress 订阅流式上报真实百分比, 进度条实时展示
+  //   3) 确认重启 -> install : 宿主关闭当前小程序 -> 解压替换沙盒 -> 冷重启加载新包
+  // 下载/校验在运行期完成, 解压替换延后到小程序关闭后, 彻底避开运行期替换卡死的 ANR。
+  onCheckUpdate() {
+    if (typeof wx.extBridge !== 'function') {
+      wx.showToast({ title: '当前环境不支持更新', icon: 'none' })
+      return
+    }
+    wx.showLoading({ title: '检查更新中...' })
+    wx.extBridge({
+      module: 'MiniAppUpdate',
+      event: 'check',
+      data: {},
+      success: (res) => {
+        wx.hideLoading()
+        if (!res.hasUpdate) {
+          wx.showToast({ title: '已是最新版本', icon: 'none' })
+          return
+        }
+        // 第一确认: 是否下载更新
+        wx.showModal({
+          title: '更新提示',
+          content: `发现新版本 ${res.versionName || ''}, 是否下载更新?`,
+          success: (r) => { if (r.confirm) this._downloadUpdate() },
+        })
+      },
+      fail: (err) => {
+        wx.hideLoading()
+        console.error('[index] check update fail:', err)
+        wx.showToast({ title: '检查更新失败', icon: 'none' })
+      },
+    })
+  },
+
+  // 第二步: 下载并校验到暂存(运行期安全), 进度条实时展示; 完成后提示重启
+  _downloadUpdate() {
+    this.setData({ showProgress: true, updateStage: 'download', updatePercent: 0 })
+    wx.extBridge({
+      module: 'MiniAppUpdate',
+      event: 'download',
+      data: {},
+      success: (res) => {
+        this.setData({ showProgress: false })
+        if (!res.downloaded) {
+          wx.showToast({ title: '已是最新版本', icon: 'none' })
+          return
+        }
+        // 第二确认: 是否重启小程序生效
+        wx.showModal({
+          title: '更新完成',
+          content: `新版本 ${res.versionName || ''} 已下载, 是否重启小程序生效?`,
+          success: (r) => { if (r.confirm) this._installUpdate() },
+        })
+      },
+      fail: (err) => {
+        this.setData({ showProgress: false })
+        console.error('[index] download update fail:', err)
+        const msg = (err && err.errMsg) || ''
+        wx.showToast({ title: msg.indexOf('updating') >= 0 ? '正在下载更新...' : '下载失败', icon: 'none' })
+      },
+    })
+  },
+
+  // 第三步: 关闭当前小程序 -> 解压替换沙盒 -> 冷重启(宿主侧主线程执行, 当前小程序将被销毁)
+  _installUpdate() {
+    if (typeof wx.extBridge !== 'function') return
+    wx.extBridge({
+      module: 'MiniAppUpdate',
+      event: 'install',
+      data: {},
+      success: () => {},
+      fail: (err) => { console.error('[index] install update fail:', err) },
+    })
+  },
+
+  // 退出登录: 确认后清登录态并 reLaunch 回登录页(清空页面栈)
+  _logout() {
+    wx.showModal({
+      title: '退出登录',
+      content: '确定要退出登录吗?',
+      success: (res) => {
+        if (!res.confirm) return
+        try {
+          wx.removeStorageSync('token')
+          wx.removeStorageSync('userName')
+        } catch (e) {}
+        const app = getApp()
+        if (app && app.globalData) app.globalData.hasLogin = false
+        wx.reLaunch({ url: '/page/login/login' })
+      },
+    })
   },
 
   onScan() {
