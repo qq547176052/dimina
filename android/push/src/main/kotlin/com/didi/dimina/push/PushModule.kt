@@ -96,7 +96,7 @@ https://www.lddgo.net/convert/imagebasesix
 
 
 {
-  "title":   "通知标题",
+  "title":   "一楼 白名单",
   "content": "通知正文",
   "level":   "high",
   "image":   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAOUlEQVR42u3NMQ0AIBAEwZezmlCCMGqUfI0ONFz5ySbTTzVE2B0pAwMDA4MRAWdF3iViYGBgYDAi+MoOqkz2a0leAAAAAElFTkSuQmCC",

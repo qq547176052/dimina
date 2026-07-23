@@ -34,6 +34,7 @@ import org.json.JSONObject
  * 履历: 2026-07-18 新增 close 选项, 点击仅关闭横幅不跳转 app(优先级高于 url/小程序)
  * 履历: 2026-07-20 新增 miniProgram 字段, 点击打开指定小程序并把原始 JSON 作为启动参数(query.payload)传入
  * 履历: 2026-07-21 落地页 root 动态判定: 跳转 path 命中小程序首页则 root=true(回后台), 否则 root=false(可回退到首页)
+ * 履历: 2026-07-23 通知标题按关键字着色: 白名单绿/黑名单红/VIP名单金/访客蓝/陌生人灰(仅自定义视图, 系统标准样式不可着色)
  */
 object NotificationHelper {
     /** 渠道版本, 调整通知行为后自增以强制重建渠道(渠道创建后不可变) */
@@ -245,10 +246,29 @@ object NotificationHelper {
         return Bitmap.createScaledBitmap(src, (src.width * ratio).toInt(), (src.height * ratio).toInt(), true)
     }
 
+    /** 标题关键字 -> 颜色(按名单类型区分通知标题颜色); 命中关键字返回对应色, 未命中返回 null(保留布局默认色) */
+    private val TITLE_COLORS = listOf(
+        "白名单"  to 0xFF07C160.toInt(), // 绿
+        "黑名单"  to 0xFFE54D42.toInt(), // 红
+        "VIP名单" to 0xFFD4AF37.toInt(), // 金
+        "访客"    to 0xFF1989FA.toInt(), // 蓝
+        "陌生人"  to 0xFF86909C.toInt(), // 灰
+    )
+
+    /** 依标题关键字取颜色, 无命中返回 null */
+    private fun titleColorOf(title: String): Int? {
+        for ((key, color) in TITLE_COLORS) {
+            if (title.contains(key)) return color
+        }
+        return null
+    }
+
     /** 构建自定义视图: 图片 + 标题 + 正文 (RemoteViews 不支持 WebView, 仅静态图文) */
     private fun buildCustomView(layoutRes: Int, context: Context, title: String, content: String, bitmap: Bitmap?): RemoteViews {
         val rv = RemoteViews(context.packageName, layoutRes)
         rv.setTextViewText(R.id.notif_title, title)
+        // 按名单关键字着色通知标题, 未命中关键字则不覆盖(保留 XML 默认)
+        titleColorOf(title)?.let { rv.setTextColor(R.id.notif_title, it) }
         rv.setTextViewText(R.id.notif_content, content)
         if (bitmap != null) {
             rv.setViewVisibility(R.id.notif_image, View.VISIBLE)
