@@ -12,6 +12,7 @@
 //   2026-07-22 优化下拉/上滑交互: 橡皮筋阻尼 + 速度甩动 + 点击展开 + 关闭按钮 + 方向修正
 //   2026-07-22 沉浸式状态栏: navbar 顶部用 statusBarHeight(px) 预留系统状态栏高度
 //   2026-07-22 下拉交互改为: 列表滚到顶下拉唤出面板 / 面板整体上滑关闭(移除把手) / 滚动增强
+//   2026-07-23 修复下拉在 dimina(列表有内容)失效: 改用 scroll-view 原生 refresher 触发面板(组件内置, 不与原生滚动抢手势); 面板上滑关闭保留自定义 catchtouch
 Page({
   data: {
     keywords: '',
@@ -40,7 +41,6 @@ Page({
 
   // 拖拽过程临时状态(不放进 data, 避免无谓渲染)
   _drag: null,
-  _scrollTop: 0, // 列表当前滚动位置, 用于判断是否滚到顶以触发下拉面板
 
   onLoad() {
     const that = this
@@ -91,30 +91,26 @@ Page({
     })
   },
 
-  // ===== 下拉面板: 拖拽(橡皮筋阻尼 + 速度甩动) =====
-  // 列表滚到顶下拉、面板整体上滑, 共用同一套拖拽逻辑, 由 data-role 区分触发源
+  // ===== 下拉面板: 原生 refresher 触发 + 面板自定义上滑关闭 =====
+  // 列表顶部下拉由 scroll-view 原生 refresher 触发(见 bindrefresherrefresh),
+  // 不再自行抢 touch, 避免与原生滚动冲突; 面板内上滑关闭用自定义手势(catchtouch, role=panel)
+  onRefresherRefresh() {
+    // 原生下拉刷新触发: 打开添加小程序面板
+    this._setPanel(true)
+  },
+
+  // 仅面板(role=panel)使用自定义手势: 上滑收起面板
   onPullStart(e) {
-    const role = e.currentTarget.dataset.role
-    if (role === 'list') {
-      // 仅当列表在顶部且面板未开时, 下拉才唤出面板
-      if (this._scrollTop > 0 || this.data.panelOpen) return
-    } else if (role === 'panel') {
-      // 仅当面板已开时, 上滑才收起面板
-      if (!this.data.panelOpen) return
-    }
+    if (e.currentTarget.dataset.role !== 'panel') return
+    if (!this.data.panelOpen) return
     const t = e.touches[0]
     this._drag = {
       startY: t.clientY,
       baseY: this.data.panelY,
       time: Date.now(),
-      role,
+      role: 'panel',
     }
     this.setData({ panelTransition: false })
-  },
-
-  // 列表滚动位置上报, 供下拉触发判断
-  onPageScroll(e) {
-    this._scrollTop = e.detail.scrollTop
   },
 
   onPullMove(e) {
@@ -122,8 +118,6 @@ Page({
     if (!d) return
     const t = e.touches[0]
     const delta = t.clientY - d.startY
-    // 列表侧向下滚动由 scroll-view 自身处理, 不干扰面板
-    if (d.role === 'list' && delta < 0) return
     const h = this.data.panelHeight
     const min = -h
     let y = d.baseY + delta

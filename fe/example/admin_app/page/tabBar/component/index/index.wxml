@@ -11,6 +11,7 @@
 <!--履历: 2026-07-22 优化下拉/上滑交互: 橡皮筋阻尼 + 速度甩动 + 点击展开 + 关闭按钮 + 方向修正-->
 <!--履历: 2026-07-22 沉浸式状态栏: navbar 顶部用 statusBarHeight(px) 预留系统状态栏, 避免与状态栏重叠-->
 <!--履历: 2026-07-22 下拉交互改为: 列表滚到顶继续下拉唤出面板, 面板整体上滑关闭(移除把手), 滚动增强-->
+<!--履历: 2026-07-23 修复下拉在 dimina(列表有内容)失效: 改用 scroll-view 原生 refresher(组件内置, 不与原生滚动抢手势) 触发面板; 面板上滑关闭仍用自定义 catchtouch -->
 <view class="page-wrap">
   <!-- 顶部导航栏: 仿 QQ, 左上角头像+昵称+在线状态(点开抽屉), 右上角加号(点开菜单) -->
   <view class="navbar" style="padding-top: calc({{statusBarHeight}}px + 16rpx);">
@@ -31,13 +32,9 @@
   <scroll-view
     class="page"
     scroll-y
-    enhanced="{{true}}"
-    bounces="{{true}}"
-    bindscroll="onPageScroll"
-    bindtouchstart="onPullStart"
-    bindtouchmove="onPullMove"
-    bindtouchend="onPullEnd"
-    data-role="list"
+    refresher-enabled="{{true}}"
+    refresher-default-style="none"
+    bindrefresherrefresh="onRefresherRefresh"
   >
     <view class="search">
       <input
@@ -76,9 +73,9 @@
   >
     <view
       class="pull-panel"
-      bindtouchstart="onPullStart"
-      bindtouchmove="onPullMove"
-      bindtouchend="onPullEnd"
+      catchtouchstart="onPullStart"
+      catchtouchmove="onPullMove"
+      catchtouchend="onPullEnd"
       data-role="panel"
     >
       <!-- 面板右上角关闭按钮 -->
