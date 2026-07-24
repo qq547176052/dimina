@@ -1,5 +1,22 @@
 # Changelog
 
+## [v1.4.2] 2026-07-24
+
+### 新增
+
+- Android、iOS 和 HarmonyOS 支持无底包时通过 `updateManifestUrl` 完成首次安装，在 service/render 初始化前校验、下载并激活远程小程序包。
+- Web 容器支持通过 `manifestUrl` 启动未预置在 `appList.json` 中的小程序，并从 manifest 指定的静态资源目录加载编译产物。
+
+### 优化
+
+- 首次安装复用现有包校验与原子替换链路，校验 `appId`、必需文件及可选 SHA-256，失败时终止本次启动并清理临时包。
+- 保持已有底包快速启动和启动后后台更新语义，首次安装仅用于建立本地运行基线。
+
+### 兼容性
+
+- Android、iOS 和 HarmonyOS SDK 版本统一升级到 1.4.2。
+- JSSDK 升级到 1.0.20。
+
 ## [v1.4.1] 2026-07-17
 
 ### 优化

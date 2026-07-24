@@ -39,6 +39,49 @@ export async function getMiniAppInfo(appId) {
 	}
 }
 
+function ensureTrailingSlash(url) {
+	return url.endsWith('/') ? url : `${url}/`
+}
+
+/**
+ * Resolve a remotely published mini program from its manifest.
+ *
+ * Web does not unpack the native zip package. The compiled directory must be
+ * deployed as static files under `<resourceBaseUrl>/<appId>/`. `webBaseUrl`
+ * may override the manifest directory when those resources are hosted
+ * elsewhere.
+ */
+export async function getMiniAppManifest(manifestUrl) {
+	const resolvedManifestUrl = new URL(manifestUrl, window.location.href)
+	const response = await fetch(resolvedManifestUrl)
+	if (!response.ok) {
+		throw new Error(`manifest request failed: HTTP ${response.status}`)
+	}
+
+	const root = await response.json()
+	const manifest = root?.data ?? root
+	if (!manifest || typeof manifest !== 'object') {
+		throw new Error('manifest is not an object')
+	}
+	if (!manifest.appId) {
+		throw new Error('manifest missing appId')
+	}
+	if (!manifest.path) {
+		throw new Error('manifest missing path')
+	}
+
+	const configuredBaseUrl = manifest.webBaseUrl || manifest.baseUrl
+	const resourceBaseUrl = configuredBaseUrl
+		? new URL(configuredBaseUrl, resolvedManifestUrl)
+		: new URL('./', resolvedManifestUrl)
+
+	return {
+		...manifest,
+		manifestUrl: resolvedManifestUrl.href,
+		resourceBaseUrl: ensureTrailingSlash(resourceBaseUrl.href),
+	}
+}
+
 /**
  * Generates a consistent color based on the name's hash code
  * @param {string} name - The name to generate a color from

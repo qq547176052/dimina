@@ -9,10 +9,11 @@
 | 能力 | Android | iOS | Harmony | Web |
 | --- | --- | --- | --- | --- |
 | 随宿主发布内置包 | 支持 | 支持 | 支持 | 使用静态资源部署 |
+| 无底包时根据 ManifestUrl 首次安装 | 支持 | 支持 | 支持 | 支持远程静态目录 |
 | `updateManifestUrl` 远程更新 | 支持 | 支持 | 支持 | 暂未提供 |
 | `wx.getUpdateManager()` | 支持 | 支持 | 支持 | 支持，默认返回无更新 |
 
-本文后续的沙盒目录、zip 安装和远程 manifest 流程针对 Android、iOS 与 Harmony。Web 容器的资源版本由站点部署和缓存策略管理。
+Android、iOS 与 Harmony 会下载 manifest 中的 zip 并安装到沙盒。Web 不解压 native zip，而是根据 manifest 直接加载已部署的编译产物目录；Web 的资源版本仍由站点部署和缓存策略管理。
 
 ## 默认更新模型
 
@@ -63,6 +64,10 @@ Android 端 WebView 通过 `https://appassets.androidplatform.net/jsapp/` 映射
 
 当前 Android / iOS / Harmony SDK 已内置远程自主更新的基础流程。宿主只需要为小程序配置 `updateManifestUrl`，SDK 会在小程序启动后自动拉取 manifest、比较 `versionCode`、下载 zip、校验并安装到沙盒目录，然后通过 `wx.getUpdateManager()` 通知业务代码。
 
+同一个配置也支持无底包首次安装。启动时如果找不到可运行的 `main/app-config.json` 和 `main/logic.js`，SDK 会在初始化 service/render 之前拉取 manifest、校验 `appId`、下载并直接激活远程包，再继续正常启动。已有本地包时仍保持原来的快速启动和后台更新检查，不会阻塞启动。
+
+首次安装是建立本地基线，不会发送 `onUpdateReady()`；安装失败会终止本次启动，也不会伪装成“无更新”。宿主可以在网络恢复后重试启动。
+
 远程 manifest 支持以下格式，也兼容外层包一层 `data` 字段：
 
 ```json5
@@ -73,16 +78,18 @@ Android 端 WebView 通过 `https://appassets.androidplatform.net/jsapp/` 映射
   "versionCode": 2,
   "versionName": "1.0.1",
   "packageUrl": "https://example.com/jsapp/wx92269e3b2f304afc-2.zip",
-  "sha256": "可选，zip 文件的 SHA-256"
+  "sha256": "可选，zip 文件的 SHA-256",
+  "webBaseUrl": "https://example.com/web-apps/"
 }
 ```
 
 字段说明：
 
 - `appId` 必须与当前启动的小程序一致。
-- `versionCode` 必须大于本地已安装版本才会触发更新。
+- 已有本地包时，`versionCode` 必须大于当前版本才会触发更新；首次安装直接以 manifest 版本建立基线。
 - `packageUrl` 是小程序 zip 包地址；也兼容字段名 `downloadUrl` 或 `url`。
-- `sha256` 可选，配置后 SDK 会校验 zip 内容，不一致则触发 `onUpdateFailed()`。
+- `sha256` 可选，配置后 SDK 会校验 zip 内容；普通更新不一致会触发 `onUpdateFailed()`，首次安装则终止启动。
+- `webBaseUrl` 仅供 Web 使用，表示包含 `<appId>/` 目录的静态资源根地址；省略时使用 manifest 所在目录。
 
 当前内置更新器会校验 HTTP 响应、`appId`、`versionCode`、可选 SHA-256，以及资源包中的必需文件。它不内置包签名、证书链、灰度发布、下载大小上限或服务端回滚策略；生产环境需要由宿主或发布平台补齐这些策略。
 
@@ -125,6 +132,17 @@ val miniProgram = MiniProgram(
 )
 ```
 
+无底包时只需要保留宿主已知的 `appId`，名称、入口和版本由 manifest/编译产物提供：
+
+```kotlin
+val miniProgram = MiniProgram(
+    appId = "wx92269e3b2f304afc",
+    path = null,
+    updateManifestUrl = "https://example.com/jsapp/wx92269e3b2f304afc.json"
+)
+Dimina.getInstance().startMiniProgram(activity, miniProgram)
+```
+
 如果通过示例工程读取 `config.json` 创建小程序，也可以在内置 `config.json` 中增加可选字段：
 
 ```json5
@@ -150,7 +168,7 @@ appConfig.updateManifestUrl = "https://example.com/jsapp/wx92269e3b2f304afc.json
 let app = DMPAppManager.sharedInstance().appWithConfig(appConfig: appConfig)
 ```
 
-iOS 会将远程包安装到 `Documents/Dimina/<appId>/`。更新准备好后，业务调用 `applyUpdate()` 会重建 service 引擎、重新读取新包配置并 relaunch 到入口页。
+iOS 会将远程包安装到 `Documents/Dimina/<appId>/`。即使 `JsApp.bundle` 中没有该 `appId`，首次 `launch` 也会先完成 manifest 安装。更新准备好后，业务调用 `applyUpdate()` 会重建 service 引擎、重新读取新包配置并 relaunch 到入口页。
 
 ### Harmony 接入
 
@@ -162,11 +180,29 @@ appConfig.updateManifestUrl = "https://example.com/jsapp/wx92269e3b2f304afc.json
 const app = DMPAppManager.sharedInstance().appWithConfig(appConfig)
 ```
 
-Harmony 会将远程包安装到 `${filesDir}/dimina/<appId>/<versionCode>/`，并更新 `${filesDir}/dimina/<appId>/config.json` 指向新版本。更新准备好后，业务调用 `applyUpdate()` 会走现有 `updateApp()` 重启链路，从新的版本目录加载。
+Harmony 会将远程包安装到 `${filesDir}/dimina/<appId>/<versionCode>/`，并更新 `${filesDir}/dimina/<appId>/config.json` 指向新版本。即使 rawfile 中没有该 `appId` 的底包，首次启动也会在包加载阶段先安装 manifest 包。更新准备好后，业务调用 `applyUpdate()` 会走现有 `updateApp()` 重启链路，从新的版本目录加载。
 
 ### Web 行为
 
-Web 容器会创建 `UpdateManager`，但当前没有消费 `updateManifestUrl` 的远程安装器。根页面加载时会通知“无更新”，因此业务注册的 `onCheckForUpdate` 会收到 `hasUpdate: false`。如需 Web 端版本更新，应通过站点发布、Service Worker 或宿主自己的资源版本策略实现，而不是写入原生端沙盒目录。
+Web 容器可以直接通过 `manifestUrl` 启动未预置在 `appList.json` 中的小程序：
+
+```text
+https://container.example.com/?manifestUrl=https%3A%2F%2Fcdn.example.com%2Fminiapps%2Fmanifest.json
+```
+
+也可以由宿主代码调用：
+
+```js
+await AppManager.openApp({
+  manifestUrl: 'https://cdn.example.com/miniapps/manifest.json',
+  scene: 1001,
+  destroy: true,
+}, application)
+```
+
+Web 会从 `webBaseUrl/<appId>/main/app-config.json`、`logic.js` 以及页面资源直接加载编译产物，不下载或解压 `packageUrl`。manifest 和静态资源跨域时，资源服务器需要允许 CORS。远程构建中的图片等静态资源应使用可部署前缀（例如设置 `ASSETS_PATH_PREFIX`），避免写死到容器站点根路径。
+
+Web 端的 `UpdateManager` 仍默认通知“无更新”；版本切换由站点发布、HTTP 缓存、Service Worker 或宿主策略负责。
 
 ## 写入默认沙盒目录
 

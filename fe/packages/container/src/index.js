@@ -40,6 +40,18 @@ window.onload = function () {
 	application.initRootView(appListPage)
 	device.open(application)
 
+	const searchParams = new URLSearchParams(window.location.search)
+	const manifestUrl = searchParams.get('manifestUrl')
+	if (manifestUrl) {
+		AppManager.openApp({
+			manifestUrl,
+			path: searchParams.get('entry') || undefined,
+			scene: 1001,
+			destroy: true,
+		}, application)
+		return
+	}
+
 	// 刷新后从 query 路由恢复小程序及页面；兼容旧 hash 路由
 	const parsed = HashRouter.parse(window.location.hash, window.location.search)
 	if (parsed) {

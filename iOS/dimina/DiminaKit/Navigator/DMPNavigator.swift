@@ -580,7 +580,7 @@ public class DMPNavigator: NSObject {
     @MainActor
     func reloadMiniProgram(
         animated: Bool = false,
-        prepareRuntime: @MainActor () async -> DMPLaunchConfig
+        prepareRuntime: @MainActor () async -> DMPLaunchConfig?
     ) async {
         guard let navigationController = navigationController else {
             DMPLogger.debug("导航控制器未设置")
@@ -597,7 +597,9 @@ public class DMPNavigator: NSObject {
         clearMiniProgramPageState()
         pageControllers.forEach { $0.destroy() }
 
-        let launchConfig = await prepareRuntime()
+        guard let launchConfig = await prepareRuntime() else {
+            return
+        }
         await app?.openPage(launchConfig: launchConfig)
 
         guard let newRootController = navigationController.topViewController else {

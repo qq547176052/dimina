@@ -550,8 +550,19 @@ class DiminaActivity : ComponentActivity() {
                         LogUtils.e(tag, "Failed to extract mini program for appId: $appId")
                     }
                 }
+
+                val hasRunnablePackage =
+                    findAppConfigFile("jsapp/$appId") != null &&
+                        File(filesDir, "jsapp/$appId/main/logic.js").isFile
+                if (!hasRunnablePackage) {
+                    miniProgram = RemoteUpdateManager.installInitialPackage(
+                        applicationContext,
+                        miniProgram,
+                    )
+                    LogUtils.d(tag, "Installed initial mini program package from manifest")
+                }
             } catch (e: Exception) {
-                LogUtils.e(tag, "Error extracting mini program: ${e.message}")
+                LogUtils.e(tag, "Error preparing mini program resources: ${e.message}")
                 withContext(Dispatchers.Main) { finish() }
                 return@withContext
             }

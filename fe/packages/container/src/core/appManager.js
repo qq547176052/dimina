@@ -1,5 +1,5 @@
 import { MiniApp } from '@/pages/miniApp/miniApp'
-import { getMiniAppInfo } from '@/services'
+import { getMiniAppInfo, getMiniAppManifest } from '@/services'
 import { queryPath } from '@/utils/util'
 
 export class AppManager {
@@ -33,9 +33,33 @@ export class AppManager {
 	}
 
 	static async openApp(opts, dimina) {
-		const { appId, path, scene, destroy, restoreStack } = opts
+		const { scene, destroy, restoreStack } = opts
+		const storedManifestUrl = opts.appId
+			? sessionStorage.getItem(`dimina:manifest:${opts.appId}`)
+			: null
+		const manifestUrl = opts.manifestUrl || storedManifestUrl
+		const manifest = manifestUrl
+			? await getMiniAppManifest(manifestUrl)
+			: null
+		const appId = opts.appId || manifest?.appId
+		if (!appId) {
+			throw new Error('openApp requires appId or manifestUrl')
+		}
+		if (manifest && manifest.appId !== appId) {
+			throw new Error(`manifest appId ${manifest.appId} does not match ${appId}`)
+		}
+
+		const path = opts.path || manifest?.path
+		if (!path) {
+			throw new Error(`mini program ${appId} has no launch path`)
+		}
 		const { pagePath, query } = queryPath(path)
-		const { name, logo } = await getMiniAppInfo(appId)
+		const localInfo = manifest ? null : await getMiniAppInfo(appId)
+		const name = manifest?.name || localInfo?.name || ''
+		const logo = manifest?.logo || localInfo?.logo || ''
+		if (manifest) {
+			sessionStorage.setItem(`dimina:manifest:${appId}`, manifest.manifestUrl)
+		}
 
 		if (destroy) { // 打开新小程序前销毁之前的小程序视图
 			for (const app of this.appStack) {
@@ -61,6 +85,8 @@ export class AppManager {
 				pagePath,
 				query,
 				restoreStack, // 完整页面栈，用于刷新后静默恢复
+				manifestUrl: manifest?.manifestUrl,
+				resourceBaseUrl: manifest?.resourceBaseUrl,
 			})
 
 			this.appStack.push(miniApp)

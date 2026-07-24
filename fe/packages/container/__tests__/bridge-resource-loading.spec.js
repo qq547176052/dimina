@@ -103,6 +103,36 @@ describe('Bridge resource loading protocol', () => {
 		])
 	})
 
+	it('uses the manifest resource base for both render and service loaders', () => {
+		const jscore = { postMessage: vi.fn() }
+		const bridge = new Bridge({
+			jscore,
+			appId: 'remote-app',
+			pagePath: 'pages/index/index',
+			root: 'main',
+			scene: 1001,
+			query: {},
+			baseUrl: 'https://cdn.example.com/apps/',
+		})
+		bridge.webview = { postMessage: vi.fn() }
+		bridge.parent = { getHostEnvSnapshot: vi.fn(() => ({})) }
+
+		bridge.start()
+
+		expect(bridge.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+			type: 'loadResource',
+			body: expect.objectContaining({
+				baseUrl: 'https://cdn.example.com/apps/',
+			}),
+		}))
+		expect(jscore.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+			type: 'loadResource',
+			body: expect.objectContaining({
+				baseUrl: 'https://cdn.example.com/apps/',
+			}),
+		}))
+	})
+
 	it('forwards render failures without marking resources as loaded', () => {
 		const jscore = { postMessage: vi.fn() }
 		const bridge = new Bridge({

@@ -47,6 +47,39 @@ object RemoteUpdateManager {
     }
 
     /**
+     * Installs the package described by [MiniProgram.updateManifestUrl] directly
+     * into the active app directory.
+     *
+     * This path is only used when no runnable local package exists yet. Unlike
+     * the normal update flow, the package must be activated before the service
+     * and render runtimes can start.
+     */
+    @Throws(IOException::class)
+    fun installInitialPackage(context: Context, miniProgram: MiniProgram): MiniProgram {
+        return lockFor(miniProgram.appId).withLock {
+            val manifestUrl = miniProgram.updateManifestUrl.trim()
+            if (manifestUrl.isEmpty()) {
+                throw IOException(
+                    "mini program ${miniProgram.appId} has no local package or updateManifestUrl"
+                )
+            }
+
+            val manifest = fetchManifest(manifestUrl)
+            validateManifestAppId(manifest, miniProgram.appId)
+
+            val zipFile = downloadPackage(context, manifest)
+            installActivePackage(context, manifest, zipFile)
+
+            miniProgram.copy(
+                name = miniProgram.name.ifBlank { manifest.name },
+                path = miniProgram.path ?: manifest.path,
+                versionCode = manifest.versionCode,
+                versionName = manifest.versionName,
+            )
+        }
+    }
+
+    /**
      * Promotes the downloaded package to the active directory. The current
      * runtime continues to use the old directory until this method is called.
      */
@@ -121,9 +154,7 @@ object RemoteUpdateManager {
         var updateAnnounced = false
         try {
             val manifest = fetchManifest(manifestUrl)
-            if (manifest.appId != miniProgram.appId) {
-                throw IOException("manifest appId ${manifest.appId} does not match ${miniProgram.appId}")
-            }
+            validateManifestAppId(manifest, miniProgram.appId)
 
             val currentVersion = VersionUtils.getAppVersion(miniProgram.appId)
             if (manifest.versionCode <= currentVersion) {
@@ -142,15 +173,39 @@ object RemoteUpdateManager {
             }
 
             val zipFile = downloadPackage(context, manifest)
-            if (!manifest.sha256.isNullOrBlank()) {
-                verifySha256(zipFile, manifest.sha256)
-            }
-
             installPendingPackage(context, manifest, zipFile)
             notify(EVENT_UPDATE_READY)
         } catch (e: Exception) {
             LogUtils.e(TAG, "Remote update failed: ${e.message}")
             notify(if (updateAnnounced) EVENT_UPDATE_FAILED else EVENT_NO_UPDATE)
+        }
+    }
+
+    private fun installActivePackage(
+        context: Context,
+        manifest: RemoteUpdateManifest,
+        zipFile: File,
+    ) {
+        try {
+            if (!manifest.sha256.isNullOrBlank()) {
+                verifySha256(zipFile, manifest.sha256)
+            }
+            val activeDir = appDirectory(jsAppRoot(context), manifest.appId)
+            val installed = AtomicZipInstaller.install(
+                inputProvider = { zipFile.inputStream() },
+                targetDir = activeDir,
+                requiredPaths = requiredPackagePaths,
+                afterExtract = { packageDir ->
+                    writeConfig(manifest, File(packageDir, "config.json"))
+                },
+            )
+            if (!installed) {
+                throw IOException("failed to extract or validate initial package")
+            }
+            validatePackage(activeDir, manifest.appId)
+            VersionUtils.setAppVersion(manifest.appId, manifest.versionCode)
+        } finally {
+            zipFile.delete()
         }
     }
 
@@ -194,6 +249,9 @@ object RemoteUpdateManager {
     ) {
         val pendingDir = pendingAppDirectory(context, manifest.appId)
         try {
+            if (!manifest.sha256.isNullOrBlank()) {
+                verifySha256(zipFile, manifest.sha256)
+            }
             val installed = AtomicZipInstaller.install(
                 inputProvider = { zipFile.inputStream() },
                 targetDir = pendingDir,
@@ -249,6 +307,15 @@ object RemoteUpdateManager {
             throw IOException("package appId $appId does not match $expectedAppId")
         }
         return config.getInt("versionCode")
+    }
+
+    private fun validateManifestAppId(
+        manifest: RemoteUpdateManifest,
+        expectedAppId: String,
+    ) {
+        if (manifest.appId != expectedAppId) {
+            throw IOException("manifest appId ${manifest.appId} does not match $expectedAppId")
+        }
     }
 
     private fun writeConfig(manifest: RemoteUpdateManifest, configFile: File) {

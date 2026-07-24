@@ -43,14 +43,28 @@ public class DMPApp {
             isLaunching = false
         }
 
-        await prepareRuntimeForLaunch(initializeContainer: true)
+        guard await prepareRuntimeForLaunch(initializeContainer: true) else {
+            return
+        }
 
         await openPage(launchConfig: launchConfig)
     }
 
     @MainActor
-    private func prepareRuntimeForLaunch(initializeContainer: Bool) async {
+    private func prepareRuntimeForLaunch(initializeContainer: Bool) async -> Bool {
         await Self.prepareBundleResources(appId: appId)
+
+        let installedInitialPackage: Bool
+        do {
+            installedInitialPackage = try await DMPRemoteUpdateManager.shared
+                .installInitialPackageIfNeeded(
+                    appId: appId,
+                    manifestUrl: appConfig?.updateManifestUrl
+                )
+        } catch {
+            DMPLogger.debug("Initial package install failed: \(error)")
+            return false
+        }
 
         if initializeContainer {
             initContainer()
@@ -59,7 +73,9 @@ public class DMPApp {
         await initService()
         await loadBundle()
 
-        if let manifestUrl = appConfig?.updateManifestUrl,
+        if installedInitialPackage {
+            await notifyUpdateStatus(event: "noupdate")
+        } else if let manifestUrl = appConfig?.updateManifestUrl,
            !manifestUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             Task {
                 await DMPRemoteUpdateManager.shared.checkForUpdate(app: self, manifestUrl: manifestUrl)
@@ -69,6 +85,7 @@ public class DMPApp {
         }
 
         initRender()
+        return true
     }
 
     public func initService() async {
@@ -235,7 +252,9 @@ public class DMPApp {
             self.bundleAppConfig = nil
             self.currentLaunchConfig = nil
 
-            await self.prepareRuntimeForLaunch(initializeContainer: false)
+            guard await self.prepareRuntimeForLaunch(initializeContainer: false) else {
+                return nil
+            }
             return launchConfig
         }
     }

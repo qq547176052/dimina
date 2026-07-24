@@ -325,8 +325,9 @@ export class MiniApp {
 		// 2. 读取配置文件，同时保证 LaunchScreen 最少展示一个略长于 present 的时长
 		const root = 'main'
 		const configPath = `${this.appInfo.appId}/${root}/app-config.json`
+		const resourceBaseUrl = this.appInfo.resourceBaseUrl || import.meta.env.BASE_URL
 		const [configContent] = await Promise.all([
-			readFile(`${import.meta.env.BASE_URL}${configPath}`),
+			readFile(`${resourceBaseUrl}${configPath}`),
 			sleep(LAUNCH_SCREEN_MIN_MS),
 		])
 
@@ -474,6 +475,7 @@ export class MiniApp {
 			scene,
 			pages,
 			root,
+			baseUrl: this.appInfo.resourceBaseUrl || import.meta.env.BASE_URL,
 		})
 
 		bridge.parent = this

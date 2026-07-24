@@ -23,6 +23,7 @@ export class WebView {
 	async init(callback) {
 		await this.frameLoaded()
 		const iframeWindow = window.frames[this.iframe.name]
+		this.applyResourceBaseUrl(iframeWindow.document)
 
 		// 监听渲染线程的消息
 		iframeWindow.DiminaRenderBridge.invoke = (msg) => {
@@ -34,6 +35,19 @@ export class WebView {
 		}
 
 		callback?.()
+	}
+
+	/**
+	 * Compiled asset paths can be relative when ASSETS_PATH_PREFIX is enabled.
+	 * Point them at the manifest's deployed directory instead of the container.
+	 */
+	applyResourceBaseUrl(document) {
+		if (!this.opts.resourceBaseUrl) {
+			return
+		}
+		const base = document.createElement('base')
+		base.href = this.opts.resourceBaseUrl
+		document.head.prepend(base)
 	}
 
 	invoke(handler) {

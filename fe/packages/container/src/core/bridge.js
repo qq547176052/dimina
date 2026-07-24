@@ -145,7 +145,7 @@ export class Bridge {
 				appId: this.opts.appId,
 				pagePath: this.opts.pagePath,
 				root: this.opts.root,
-				baseUrl: import.meta.env.BASE_URL,
+				baseUrl: this.opts.baseUrl || import.meta.env.BASE_URL,
 			},
 		})
 
@@ -160,7 +160,7 @@ export class Bridge {
 				scene: this.opts.scene,
 				query: this.opts.query,
 				root: this.opts.root,
-				baseUrl: import.meta.env.BASE_URL,
+				baseUrl: this.opts.baseUrl || import.meta.env.BASE_URL,
 				hostEnv: this.parent.getHostEnvSnapshot(),
 			},
 		})
@@ -191,6 +191,7 @@ export class Bridge {
 			const webview = new WebView({
 				configInfo: this.opts.configInfo,
 				isRoot: this.opts.isRoot,
+				resourceBaseUrl: this.opts.baseUrl,
 				// 返回首页按钮显隐的权威判据在 miniApp（它掌握 entryPagePath / tabBar）
 				showHomeButton: this.parent.shouldShowHomeButton({
 					pagePath: this.opts.pagePath,
