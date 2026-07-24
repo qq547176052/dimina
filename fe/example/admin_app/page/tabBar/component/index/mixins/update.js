@@ -5,6 +5,7 @@
 //   2026-07-24 删除 _hideLoadingSafe 双 tick 关 loading 封装(宿主已拆分 loading/toast 视图, 该封装会误关后续弹窗且难排查), 统一改用直接 wx.hideLoading()
 //   2026-07-24 所有关闭 loading 处前加 console.log('[update] 关闭loading: ...') 日记, 便于定位误关弹窗的位置
 //   2026-07-24 下载完成文案改为"下载完成 是否更新"; 下载后弹确认框, 确认则经宿主 "应用更新" 事件装包+激活+冷重启(原 updateready 内置流程不再使用); 修正 loading 关闭时序避免误关后续弹窗
+//   2026-07-24 小程序更新合并为单步: 调用宿主 "更新小程序" 事件(下载+关闭+装包+激活+冷重启), 去掉原 "下载新小程序压缩包"→确认→"应用更新" 两步流程与下载后二次确认弹窗
 module.exports = {
   // 将宿主管理扩展模块的 extBridge 调用封装为 Promise, 配合 async/await 消除回调嵌套
   // data 统一注入调用方 appId, 使宿主分辨是哪个小程序发起(更新场景即更新目标)
@@ -51,30 +52,18 @@ module.exports = {
     }
   },
 
+  // 更新小程序(单步): 经宿主 "更新小程序" 事件下载→关闭小程序→装包→激活→冷重启, 返回即已重启
   async _downloadUpdate() {
-    wx.showLoading({ title: '下载新小程序压缩包中...', mask: true })
+    wx.showLoading({ title: '更新小程序中...', mask: true })
     try {
-      await this._callAppList('下载新小程序压缩包')
-      console.log('[update] 关闭loading: 下载新小程序压缩包结束')
+      await this._callAppList('更新小程序')
+      console.log('[update] 关闭loading: 更新小程序结束(已重启)')
       wx.hideLoading()
-      wx.showToast({ title: '下载完成 是否更新', icon: 'none', duration: 1000 })
-      // 下载完成: 询问是否立即应用更新(经宿主 "应用更新" 事件装包+激活+冷重启)
-      const r = await this._confirmModal('下载完成', '是否更新?')
-      if (r.confirm) {
-        wx.showLoading({ title: '应用更新中...', mask: true })
-        try {
-          await this._callAppList('应用更新')
-        } catch (e) {
-          wx.showToast({ title: '应用更新失败', icon: 'none', duration: 1000 })
-        } finally {
-          console.log('[update] 关闭loading: 应用更新结束')
-          wx.hideLoading()
-        }
-      }
+      wx.showToast({ title: '更新完成', icon: 'none', duration: 1000 })
     } catch (e) {
-      console.log('[update] 关闭loading: 下载新小程序压缩包异常', e)
+      console.log('[update] 关闭loading: 更新小程序异常', e)
       wx.hideLoading()
-      wx.showToast({ title: '下载失败', icon: 'none', duration: 1000 })
+      wx.showToast({ title: '更新失败', icon: 'none', duration: 1000 })
     }
   },
 

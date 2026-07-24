@@ -48,8 +48,8 @@ import java.util.zip.ZipOutputStream
  *   2026-07-24 "应用更新" 流程改为三步且严格顺序: 先 closeMiniProgramOnly(经 CountDownLatch 等关闭真正完成)→ 同步 installPendingFromZip+activatePendingUpdate(装包激活完成才继续)→ startMiniProgram 重新打开; 去掉 sleep 硬等, 改为等待完成回调
  *   2026-07-24 "应用更新" 第三步改为重建 LAUNCHER(MainActivity, FLAG_ACTIVITY_NEW_TASK|CLEAR_TASK), 经 onCreate→launchDefaultMiniProgram 冷重启拉起最新版本; 不再用已 finish 的 MainActivity 实例作 startMiniProgram 上下文(onCreate 不会重跑且上下文已销毁)
  *   2026-07-24 "应用更新" 装包前补抓 config.json 注入 zip: cnb 源 zip 仅含 main 目录内容, 缺根级 config.json 致 installPendingFromZip 校验未通过; 新增 ensureUpdateZipHasConfig 自 cnb 拉取 config.json 重新打包, 使校验(appId/versionCode)通过
- *   2026-07-24 "应用更新" 装包激活成功后删除更新压缩包(注入 config 后为 update.zip), 释放缓存空间
- *   2026-07-24 下载更新加日记: 打印 Basic Auth(cnb+部署令牌)、保存位置、包大小(头部 Content-Length 与实际字节), 便于核对 cnb 鉴权与排查校验失败
+ *   2026-07-24 "应用更新" 的更新压缩包清理由 installPendingFromZip 的 finally 负责(装包后即删除, 注入 config 后为 update.zip); 移除 MainActivity 内冗余删除(原因文件已被删而误报"删除失败")
+ *   2026-07-24 小程序更新合并为单步 "更新小程序": 下载 zip 后直接关闭小程序→装包(.pending)→激活→冷重启, 去掉原 "下载新小程序压缩包"+"应用更新" 两次 extBridge 调用; 抽出 downloadUpdateZip 落盘辅助(原 downloadMiniAppUpdate 仅落盘部分)供合并流程复用
  */
 class MainActivity : ComponentActivity() {
 
@@ -193,48 +193,49 @@ class MainActivity : ComponentActivity() {
         }.start()
     }
 
-    // 下载更新: GET {base}/{appId}/{appId}.zip → 仅落盘到 cacheDir/dimina-updates/<appId>.zip
-    // 约定: 落盘成功即回调 onSuccess(返回 appId/size/path); 装包(.pending)/激活/冷重启由单独的 "应用更新" 事件负责
-    private fun downloadMiniAppUpdate(
+    // 下载更新 zip 到 cacheDir/dimina-updates/<appId>.zip, 返回落盘文件(失败抛异常)
+    // 仅负责落盘, 装包(.pending)/激活/冷重启由 applyMiniAppUpdate 负责
+    private fun downloadUpdateZip(appId: String): File {
+        val url = "${AppConfig.UPDATE_CNB_BASE}/$appId/$appId.zip"
+        // 鉴权: Basic Auth(用户=${AppConfig.UPDATE_CNB_USER}, 已带部署令牌); 源地址与令牌见 更新小程序.md
+        LogUtils.i(TAG, "下载更新开始 appId=$appId 鉴权=BasicAuth(${AppConfig.UPDATE_CNB_USER}:***) url=$url")
+        val dir = File(cacheDir, AppConfig.UPDATE_DOWNLOAD_DIR_NAME).apply { mkdirs() }
+        val zipFile = File(dir, "$appId.zip")
+        LogUtils.i(TAG, "下载更新保存位置: ${zipFile.absolutePath}")
+        val conn = openCnbConnection(url)
+        try {
+            if (conn.responseCode != HttpURLConnection.HTTP_OK) {
+                throw IOException("zip HTTP ${conn.responseCode}")
+            }
+            val declaredLen = conn.contentLengthLong
+            LogUtils.i(TAG, "下载更新响应 HTTP_OK appId=$appId 头部Content-Length=${if (declaredLen >= 0) declaredLen else "未知(可能为分块传输)"}")
+            conn.inputStream.use { input -> FileOutputStream(zipFile).use { output -> input.copyTo(output) } }
+            LogUtils.i(TAG, "下载更新完成 appId=$appId 实际大小=${zipFile.length()} 字节 路径=${zipFile.absolutePath}")
+        } finally {
+            conn.disconnect()
+        }
+        return zipFile
+    }
+
+    // 更新小程序(一步到位): 下载 zip → 关闭小程序 → 装包(.pending) → 激活 → 冷重启 → 删包
+    // 合并原 "下载新小程序压缩包" + "应用更新" 两步, 详见 更新小程序.md
+    private fun downloadAndApplyMiniAppUpdate(
         appId: String,
         callback: com.didi.dimina.api.ext.ExtCallback,
     ) {
         if (appId.isBlank()) {
-            callback.onFail(failMsg("下载更新失败: 空的 appId"))
+            callback.onFail(failMsg("更新小程序失败: 空的 appId"))
             return
         }
         Thread {
             try {
-                val url = "${AppConfig.UPDATE_CNB_BASE}/$appId/$appId.zip"
-                // 鉴权: Basic Auth(用户=${AppConfig.UPDATE_CNB_USER}, 已带部署令牌); 源地址与令牌见 更新小程序.md
-                LogUtils.i(TAG, "下载更新开始 appId=$appId 鉴权=BasicAuth(${AppConfig.UPDATE_CNB_USER}:***) url=$url")
-                val dir = File(cacheDir, AppConfig.UPDATE_DOWNLOAD_DIR_NAME).apply { mkdirs() }
-                val zipFile = File(dir, "$appId.zip")
-                LogUtils.i(TAG, "下载更新保存位置: ${zipFile.absolutePath}")
-                val conn = openCnbConnection(url)
-                try {
-                    if (conn.responseCode != HttpURLConnection.HTTP_OK) {
-                        throw IOException("zip HTTP ${conn.responseCode}")
-                    }
-                    val declaredLen = conn.contentLengthLong
-                    LogUtils.i(TAG, "下载更新响应 HTTP_OK appId=$appId 头部Content-Length=${if (declaredLen >= 0) declaredLen else "未知(可能为分块传输)"}")
-                    conn.inputStream.use { input -> FileOutputStream(zipFile).use { output -> input.copyTo(output) } }
-                    LogUtils.i(TAG, "下载更新完成 appId=$appId 实际大小=${zipFile.length()} 字节 路径=${zipFile.absolutePath}")
-                } finally {
-                    conn.disconnect()
-                }
-                // 落盘完成即下载成功: 仅返回下载结果, 不含装包/激活(装包由 "应用更新" 事件触发)
-                mainHandler.post {
-                    callback.onSuccess(JSONObject().apply {
-                        put("appId", appId)
-                        put("size", zipFile.length())
-                        put("path", zipFile.absolutePath)
-                    })
-                }
+                downloadUpdateZip(appId)  // 仅落盘, 失败抛异常
+                // 下载完成即进入应用更新: 关闭小程序→装包→激活→冷重启(逻辑复用 applyMiniAppUpdate)
+                applyMiniAppUpdate(appId, callback)
             } catch (e: Exception) {
-                LogUtils.e(TAG, "下载更新异常 appId=$appId: ${e.message}")
+                LogUtils.e(TAG, "更新小程序异常(下载阶段) appId=$appId: ${e.message}")
                 mainHandler.post {
-                    callback.onFail(failMsg("下载更新失败: ${e.message}"))
+                    callback.onFail(failMsg("更新小程序失败: ${e.message}"))
                 }
             }
         }.start()
@@ -284,12 +285,8 @@ class MainActivity : ComponentActivity() {
                 }
                 mainHandler.post { applicationContext.startActivity(intent) }
                 mainHandler.post { callback.onSuccess(JSONObject().apply { put("appId", appId) }) }
-                // 4. 装包激活已完成, 压缩包不再需要, 删除以释放缓存(zipFile 可能是注入 config 后的 update.zip)
-                if (zipFile.delete()) {
-                    LogUtils.i(TAG, "应用更新: 已删除更新压缩包 ${zipFile.absolutePath}")
-                } else {
-                    LogUtils.w(TAG, "应用更新: 删除更新压缩包失败 ${zipFile.absolutePath}")
-                }
+                // 注: 更新压缩包的清理由 installPendingFromZip 的 finally 负责(装包后即删除), 此处无需再删,
+                //     否则会因文件已被删除而返回 false, 误报"删除更新压缩包失败"
             } catch (e: Exception) {
                 LogUtils.e(TAG, "应用更新异常 appId=$appId: ${e.message}")
                 mainHandler.post {
@@ -394,17 +391,13 @@ class MainActivity : ComponentActivity() {
                 }
                 // ----- 小程序远程更新(方案1: 宿主从 cnb 下载并装到 .pending, 引擎 applyUpdate 冷重启) -----
                 // 事件名与前端 index.js 对齐; 更新目标即 data.appId(等于 module=调用方自身 appId)
-                // 流程拆为两步: 下载新小程序压缩包(仅落盘) → 应用更新(装包+激活+冷重启), 详见 更新小程序.md
+                // 合并为单步 "更新小程序": 下载 zip → 关闭小程序 → 装包(.pending) → 激活 → 冷重启, 详见 更新小程序.md
                 "检查更新" -> {
                     checkMiniAppUpdate(data.optString("appId"), callback)
                     null
                 }
-                "下载新小程序压缩包" -> {
-                    downloadMiniAppUpdate(data.optString("appId"), callback)
-                    null
-                }
-                "应用更新" -> {
-                    applyMiniAppUpdate(data.optString("appId"), callback)
+                "更新小程序" -> {
+                    downloadAndApplyMiniAppUpdate(data.optString("appId"), callback)
                     null
                 }
                 else -> {
