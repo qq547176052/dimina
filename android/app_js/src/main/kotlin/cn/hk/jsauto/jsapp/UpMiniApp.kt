@@ -20,6 +20,14 @@ import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.ZipInputStream
 
+/*
+id为DEFAULT_APP_ID的小程序更新方式,流程是:点击检查更新->提示有新版本确认更新->下载新版本的压缩包->实时显示下载进度->提示重启小程序->关闭(MainActivity.kt)->解压->启动小程序
+因为id为DEFAULT_APP_ID的小程序是首页 小程序一直有运行的 所以不适合后台自动更新,其他小程序不是首页 适合后台自动更新
+
+其他小程序更新方式,流程是:启动小程序时自动检测新版本 后台自动下载新版本 下载好后不要解压替换 等待小程序关闭后解压替换 要注意考虑小程序关闭后立即启动的场景解决方案
+
+ */
+
 /**
  * 小程序更新模块: 以 git 仓库(cnb.cool)为更新源。
  *
