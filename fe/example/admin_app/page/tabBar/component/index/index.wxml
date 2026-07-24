@@ -125,8 +125,7 @@
         <text class="drawer-status">{{onlineStatus}}</text>
       </view>
       <view class="drawer-menu">
-        <view class="drawer-item" bindtap="onDrawerItem" data-key="favorite">我的收藏</view>
-        <view class="drawer-item" bindtap="onDrawerItem" data-key="setting">设置</view>
+        <view class="drawer-item" bindtap="onDrawerItem" data-key="checkUpdate">检查更新</view>
         <view class="drawer-item" bindtap="onDrawerItem" data-key="exit">退出登录</view>
       </view>
     </view>

@@ -38,11 +38,12 @@ class SystemApi : BaseApiHandler() {
         const val GET_SYSTEM_INFO_SYNC = "getSystemInfoSync"
         const val GET_SYSTEM_INFO_ASYNC = "getSystemInfoAsync"
         const val GET_SYSTEM_INFO = "getSystemInfo"
+        const val GET_ACCOUNT_INFO_SYNC = "getAccountInfoSync"
     }
 
     override val apiNames = setOf(
         OPEN_SYSTEM_BLUETOOTH_SETTING, GET_WINDOW_INFO, GET_SYSTEM_SETTING,
-        GET_SYSTEM_INFO_SYNC, GET_SYSTEM_INFO_ASYNC, GET_SYSTEM_INFO
+        GET_SYSTEM_INFO_SYNC, GET_SYSTEM_INFO_ASYNC, GET_SYSTEM_INFO, GET_ACCOUNT_INFO_SYNC
     )
 
     override fun handleAction(
@@ -115,6 +116,14 @@ class SystemApi : BaseApiHandler() {
                 val result = getSystemInfo(activity)
                 ApiUtils.invokeSuccess(params, result, responseCallback)
                 SyncResult(JSValue.createObject(result.toString()))
+            }
+
+            GET_ACCOUNT_INFO_SYNC -> {
+                // 返回当前小程序账号信息(含 appId), 供前端以自身 appId 作为 extBridge 模块名调用宿主
+                SyncResult(JSValue.createObject(JSONObject().apply {
+                    put("miniProgram", JSONObject().apply { put("appId", appId) })
+                    put("errMsg", "$GET_ACCOUNT_INFO_SYNC:ok")
+                }.toString()))
             }
 
             else -> super.handleAction(activity, appId, apiName, params, responseCallback)

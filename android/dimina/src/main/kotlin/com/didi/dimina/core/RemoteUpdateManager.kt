@@ -76,6 +76,37 @@ object RemoteUpdateManager {
         }
     }
 
+    /**
+     * 从本地 zip 安装待生效更新包到 .pending/<appId>(供宿主 cnb 源更新调用)。
+     * 内部复用 [AtomicZipInstaller] 解压并校验必需文件(config.json/main/app-config.json/main/logic.js),
+     * 校验通过后落盘; 随后可配合 [activatePendingUpdate] 提升为生效版本。
+     *
+     * @param zipFile 已下载到本地的更新包 zip(含 config.json 等标准结构)
+     * @return 安装成功返回 true
+     */
+    fun installPendingFromZip(context: Context, appId: String, zipFile: File): Boolean {
+        return lockFor(appId).withLock {
+            try {
+                val pendingDir = pendingAppDirectory(context, appId)
+                val installed = AtomicZipInstaller.install(
+                    inputProvider = { zipFile.inputStream() },
+                    targetDir = pendingDir,
+                    requiredPaths = requiredPackagePaths,
+                )
+                if (!installed) {
+                    throw IOException("failed to extract or validate update package")
+                }
+                validatePackage(pendingDir, appId)
+                true
+            } catch (e: Exception) {
+                LogUtils.e(TAG, "installPendingFromZip failed for $appId: ${e.message}")
+                false
+            } finally {
+                runCatching { zipFile.delete() }
+            }
+        }
+    }
+
     private fun checkForUpdateLocked(
         context: Context,
         miniProgram: MiniProgram,

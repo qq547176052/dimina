@@ -49,8 +49,12 @@ import kotlinx.coroutines.delay
 import org.json.JSONObject
 
 /**
- * Author: Doslin
+ * 简介: 小程序交互 API 宿主端实现(showToast/showModal/showLoading/hideToast/hideLoading/showActionSheet)
+ *       Toast 与 Loading 各自独立管理视图与定时, 避免 hideLoading 误清 showToast
+ * 履历:
+ *   2026-07-24 修复 showToast/showLoading 内部调 hideX 异步 post 导致新视图被自身清理 runnable 误删(弹窗闪一下即消失); 改为在当前 post 内同步移除旧视图
  */
+// Author: Doslin
 class InteractionApi : BaseApiHandler() {
     private companion object {
         const val SHOW_TOAST = "showToast"
@@ -65,9 +69,13 @@ class InteractionApi : BaseApiHandler() {
 
     private var handler = Handler(Looper.getMainLooper())
 
-    // Toast management
+    // Toast(showToast) 与 Loading(showLoading) 各自独立管理, 避免 hideLoading 误清 showToast
     private var currentToastView: ComposeView? = null
-    private var currentMaskView: View? = null
+    private var currentToastMaskView: View? = null
+    private var currentToastRunnable: Runnable? = null
+    private var currentLoadingView: ComposeView? = null
+    private var currentLoadingMaskView: View? = null
+    private var currentLoadingRunnable: Runnable? = null
     private var currentModalView: ComposeView? = null
     private var currentModalMaskView: View? = null
 
@@ -130,11 +138,9 @@ class InteractionApi : BaseApiHandler() {
             SHOW_LOADING -> {
                 val title = params.getString("title") // Required
                 val mask = params.optBoolean("mask", false) // Optional, default false
-                showToast(
+                showLoading(
                     context = activity,
                     title = title,
-                    icon = "loading",
-                    duration = Int.MAX_VALUE,
                     mask = mask
                 )
                 AsyncResult(JSONObject().apply {
@@ -151,7 +157,7 @@ class InteractionApi : BaseApiHandler() {
             }
 
             HIDE_LOADING -> {
-                hideToast(activity)
+                hideLoading(activity)
 
                 AsyncResult(JSONObject().apply {
                     put("errMsg", "$HIDE_LOADING:ok")
@@ -273,20 +279,93 @@ class InteractionApi : BaseApiHandler() {
     }
 
     /**
-     * Hides the currently displayed toast.
+     * Hides the currently displayed loading(showLoading), 仅清理 loading 视图, 不影响 toast。
+     * removeView 会触发 Compose 视图 onDetachedFromWindow→LifecycleRegistry.removeObserver,
+     * 该调用 Android 强制要求主线程; 故切主线程执行
+     */
+    private fun hideLoading(context: Context) {
+        handler.post {
+            val rootView = (context as Activity).window.decorView.rootView as ViewGroup
+            currentLoadingView?.let {
+                rootView.removeView(it)
+                currentLoadingView = null
+            }
+            currentLoadingMaskView?.let {
+                rootView.removeView(it)
+                currentLoadingMaskView = null
+            }
+            currentLoadingRunnable?.let {
+                handler.removeCallbacks(it)
+                currentLoadingRunnable = null
+            }
+        }
+    }
+
+    /**
+     * Hides the currently displayed toast(showToast), 仅清理 toast 视图, 不影响 loading。
+     * removeView 会触发 Compose 视图 onDetachedFromWindow→LifecycleRegistry.removeObserver,
+     * 该调用 Android 强制要求主线程; 故切主线程执行
      */
     private fun hideToast(context: Context) {
-        val rootView = (context as Activity).window.decorView.rootView as ViewGroup
-        currentToastView?.let {
-            rootView.removeView(it)
-            currentToastView = null
+        handler.post {
+            val rootView = (context as Activity).window.decorView.rootView as ViewGroup
+            currentToastView?.let {
+                rootView.removeView(it)
+                currentToastView = null
+            }
+            currentToastMaskView?.let {
+                rootView.removeView(it)
+                currentToastMaskView = null
+            }
+            currentToastRunnable?.let {
+                handler.removeCallbacks(it)
+                currentToastRunnable = null
+            }
         }
-        currentMaskView?.let {
-            rootView.removeView(it)
-            currentMaskView = null
+    }
+
+    // 展示 loading(showLoading): 不自动消失, 由 hideLoading 关闭
+    private fun showLoading(context: Context, title: String, mask: Boolean) {
+        handler.post {
+            val rootView = (context as Activity).window.decorView.rootView as ViewGroup
+            // 同步清掉旧 loading: 必须在当前 post 内直接移除, 不能调 hideLoading(context)(其内部 handler.post 会排到新 loading 设好之后执行, 误删新 loading)
+            currentLoadingView?.let { rootView.removeView(it); currentLoadingView = null }
+            currentLoadingMaskView?.let { rootView.removeView(it); currentLoadingMaskView = null }
+            currentLoadingRunnable?.let { handler.removeCallbacks(it); currentLoadingRunnable = null }
+            if (mask) {
+                val maskView = View(context).apply {
+                    setBackgroundColor(0x80000000.toInt())
+                    isClickable = true
+                }
+                rootView.addView(
+                    maskView,
+                    ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                )
+                currentLoadingMaskView = maskView
+            }
+            val composeView = ComposeView(context).apply {
+                setContent {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .wrapContentSize(Alignment.Center)
+                    ) {
+                        ToastContent(title = title, icon = "loading", duration = Long.MAX_VALUE)
+                    }
+                }
+            }
+            rootView.addView(
+                composeView,
+                ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+            )
+            currentLoadingView = composeView
         }
-        // Clear any pending handler callbacks
-        handler.removeCallbacksAndMessages(null)
     }
 
     private fun showToast(
@@ -296,12 +375,12 @@ class InteractionApi : BaseApiHandler() {
         duration: Int = 1500,
         mask: Boolean = false,
     ) {
-
         handler.post {
-            // Remove any existing toast
-            hideToast(context)
-
             val rootView = (context as Activity).window.decorView.rootView as ViewGroup
+            // 同步清掉旧 toast: 必须在当前 post 内直接移除, 不能调 hideToast(context)(其内部 handler.post 会排到新 toast 设好之后执行, 误删新 toast 并取消其定时)
+            currentToastView?.let { rootView.removeView(it); currentToastView = null }
+            currentToastMaskView?.let { rootView.removeView(it); currentToastMaskView = null }
+            currentToastRunnable?.let { handler.removeCallbacks(it); currentToastRunnable = null }
 
             if (mask) {
                 val maskView = View(context).apply {
@@ -315,12 +394,7 @@ class InteractionApi : BaseApiHandler() {
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                 )
-                currentMaskView = maskView // Store reference
-
-                handler.postDelayed({
-                    rootView.removeView(maskView)
-                    currentMaskView = null
-                }, duration.toLong())
+                currentToastMaskView = maskView // Store reference
             }
 
             val composeView = ComposeView(context).apply {
@@ -347,10 +421,10 @@ class InteractionApi : BaseApiHandler() {
             )
             currentToastView = composeView // Store reference
 
-            // Schedule removal
-            handler.postDelayed({
-                hideToast(context)
-            }, duration.toLong())
+            // Schedule removal(仅取消/触发本 toast 自身回调)
+            val removeRunnable = Runnable { hideToast(context) }
+            currentToastRunnable = removeRunnable
+            handler.postDelayed(removeRunnable, duration.toLong())
         }
     }
 }

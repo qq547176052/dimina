@@ -1753,6 +1753,16 @@ class DiminaActivity : ComponentActivity() {
         coldRestartMiniProgram(updatedMiniProgram)
     }
 
+    // 仅关闭当前小程序(释放 JS 运行时与文件占用), 不重新打开; 供宿主"应用更新"流程在替换资源文件前调用, 避免文件被占用导致解压失败
+    // onClosed 在关闭与运行时清理完成后于主线程回调, 调用方据此再继续装包
+    fun closeMiniProgramOnly(onClosed: () -> Unit) {
+        activityRegistry.closeAll(miniProgram.appId) { activity ->
+            activity.finish()
+        }
+        miniApp.clear(miniProgram.appId)
+        onClosed()
+    }
+
     private fun coldRestartMiniProgram(program: MiniProgram) {
         // Re-enter is an app-level reload, not wx.reLaunch: destroy the shared
         // JS runtime and transient API resources so the new root Activity runs
