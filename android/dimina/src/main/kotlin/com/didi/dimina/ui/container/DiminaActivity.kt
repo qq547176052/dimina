@@ -1763,6 +1763,26 @@ class DiminaActivity : ComponentActivity() {
         onClosed()
     }
 
+    // 真实已安装(沙盒)版本名: 优先取沙盒根 config.json(更新流程写入完整远程配置, 含 versionName), 兜底注册信息。
+    // getSystemInfoSync.appVersion 应反映此值, 而非静态注册版本(否则更新后版本号不变)。
+    val installedVersionName: String
+        get() {
+            val f = File(filesDir, "jsapp/${miniProgram.appId}/config.json")
+            if (f.isFile) {
+                val v = runCatching { JSONObject(f.readText()).optString("versionName", "") }.getOrNull()
+                if (!v.isNullOrBlank()) return v
+            }
+            return miniProgram.versionName
+        }
+
+    // 真实已安装(沙盒)版本号: 优先取 VersionUtils(更新流程写入), 兜底注册信息
+    val installedVersionCode: Int
+        get() {
+            val stored = VersionUtils.getAppVersion(miniProgram.appId)
+            if (stored > 0) return stored
+            return miniProgram.versionCode
+        }
+
     private fun coldRestartMiniProgram(program: MiniProgram) {
         // Re-enter is an app-level reload, not wx.reLaunch: destroy the shared
         // JS runtime and transient API resources so the new root Activity runs

@@ -40,7 +40,7 @@ Page(Object.assign(
       newPath: '',
       // 顶栏用户信息
       nickName: '我的昵称',
-      onlineStatus: '在线108',
+      onlineStatus: '在线109',
       avatarText: '我',
       // 系统状态栏高度(px), 沉浸式(custom)下需手动预留, 否则导航栏与状态栏重叠
       statusBarHeight: 0,
