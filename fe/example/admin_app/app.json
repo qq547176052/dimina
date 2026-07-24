@@ -1,5 +1,6 @@
 {
   "pages": [
+    "page/login/login",
     "page/tabBar/component/index/index",
     "page/tabBar/component/max_image/max_image"
 
