@@ -83,12 +83,13 @@ object RemoteUpdateManager {
      * Promotes the downloaded package to the active directory. The current
      * runtime continues to use the old directory until this method is called.
      */
-    fun activatePendingUpdate(context: Context, appId: String): Boolean {
+    fun activatePendingUpdate(context: Context, appId: String, force: Boolean = false): Boolean {
         return lockFor(appId).withLock {
             try {
                 val pendingPackage = readPendingPackage(context, appId) ?: return@withLock false
                 val currentVersion = VersionUtils.getAppVersion(appId)
-                if (pendingPackage.versionCode <= currentVersion) {
+                // force=true 时跳过版本守卫(扫码下载等显式安装场景, 始终覆盖装包); 否则仅在更高版本时生效
+                if (!force && pendingPackage.versionCode <= currentVersion) {
                     pendingPackage.directory.deleteRecursively()
                     return@withLock false
                 }

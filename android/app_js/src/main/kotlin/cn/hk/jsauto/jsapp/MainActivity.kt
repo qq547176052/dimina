@@ -52,6 +52,9 @@ import java.util.zip.ZipOutputStream
  *   2026-07-25 新增共享本地数据扩展模块: 固定模块名 "小程序共享数据"(与前端 compatibility.js 对齐), 经 wx.extBridge 处理 保存本地数据/读取本地数据, 持久化到 filesDir/dimina_shared/local_data.json, 多小程序共享同一份登录态等数据; 前端 compatibility.js 以固定模块名 "小程序共享数据" 作 module 调用(只注册一次, 取代原按 appId 逐个注册)
  *   2026-07-24 小程序更新合并为单步 "更新小程序": 下载 zip 后直接关闭小程序→装包(.pending)→激活→冷重启, 去掉原 "下载新小程序压缩包"+"应用更新" 两次 extBridge 调用; 抽出 downloadUpdateZip 落盘辅助(原 downloadMiniAppUpdate 仅落盘部分)供合并流程复用
  *   2026-07-25 接入非常驻小程序后台更新(upminiapp.kt): "拉起"时 UpMiniApp.onMiniAppStart 后台检查+下载; DiminaActivity.onDestroy 时 UpMiniApp.onMiniAppClose 静默装包激活(除 DEFAULT_APP_ID 外), 不重启宿主
+ *   2026-07-25 新增"下载小程序"事件(downloadminiapp.kt): 扫一扫识别 "cnb下载小程序=<appId>" 后从 cnb 下载并静默装包激活; 小程序列表合并 assets 与沙盒(filesDir/jsapp), 使下载/更新的小程序均可见
+ *   2026-07-25 新增"获取小程序信息"事件(fetchMiniAppInfo): 从 cnb config.json 读 name/version, 供前端扫码确认框展示友好名称(空则前端回退 appId); 增加 url/响应码/原始内容/解析 name 诊断日志便于排查取不到 name
+ *   2026-07-25 扫码下载(downloadminiapp.kt)改为强制装包(引擎 activatePendingUpdate force=true), 显式安装覆盖同版本不再跳过; 引擎 RemoteUpdateManager.activatePendingUpdate 新增 force 参数(默认 false, 更新/后台更新流程保持版本守卫)
  */
 class MainActivity : ComponentActivity() {
 
@@ -245,6 +248,49 @@ class MainActivity : ComponentActivity() {
                 LogUtils.e(TAG, "检查更新异常 appId=$appId: ${e.message}")
                 mainHandler.post {
                     callback.onFail(failMsg("检查更新失败: ${e.message}"))
+                }
+            }
+        }.start()
+    }
+
+    // 从 cnb config.json 读取小程序信息(名称/版本), 供前端扫码确认框展示友好名称
+    private fun fetchMiniAppInfo(
+        appId: String,
+        callback: com.didi.dimina.api.ext.ExtCallback,
+    ) {
+        if (appId.isBlank()) {
+            callback.onFail(failMsg("获取小程序信息失败: 空的 appId"))
+            return
+        }
+        Thread {
+            try {
+                val url = "${AppConfig.UPDATE_CNB_BASE}/$appId/config.json"
+                LogUtils.i(TAG, "获取小程序信息 请求 url=$url")
+                val conn = openCnbConnection(url)
+                try {
+                    val code = conn.responseCode
+                    LogUtils.i(TAG, "获取小程序信息 响应码=$code appId=$appId")
+                    if (code != HttpURLConnection.HTTP_OK) {
+                        throw IOException("config.json HTTP $code")
+                    }
+                    val raw = conn.inputStream.bufferedReader().use { it.readText() }
+                    LogUtils.i(TAG, "获取小程序信息 原始内容 appId=$appId => $raw")
+                    val json = JSONObject(raw)
+                    val name = json.optString("name", "")
+                    val result = JSONObject().apply {
+                        put("name", name)
+                        put("versionName", json.optString("versionName", ""))
+                        put("versionCode", json.optInt("versionCode", 0))
+                    }
+                    LogUtils.i(TAG, "获取小程序信息 解析 name=$name appId=$appId")
+                    mainHandler.post { callback.onSuccess(result) }
+                } finally {
+                    conn.disconnect()
+                }
+            } catch (e: Exception) {
+                LogUtils.e(TAG, "获取小程序信息异常 appId=$appId: ${e.message}")
+                mainHandler.post {
+                    callback.onFail(failMsg("获取小程序信息失败: ${e.message}"))
                 }
             }
         }.start()
@@ -455,8 +501,24 @@ class MainActivity : ComponentActivity() {
                     checkMiniAppUpdate(data.optString("appId"), callback)
                     null
                 }
+                // 获取小程序信息(名称等): 从 cnb config.json 读取, 供前端扫码确认框展示友好名称
+                "获取小程序信息" -> {
+                    fetchMiniAppInfo(data.optString("appId"), callback)
+                    null
+                }
                 "更新小程序" -> {
                     downloadAndApplyMiniAppUpdate(data.optString("appId"), callback)
+                    null
+                }
+                // 扫码下载小程序: content 为原始二维码内容("cnb下载小程序=<appId>"), 由 DownloadMiniApp 解析并下载装包
+                "下载小程序" -> {
+                    val content = data.optString("content")
+                    val appId = DownloadMiniApp.parseAppIdFromQr(content)
+                    if (appId.isNullOrBlank()) {
+                        callback.onFail(failMsg("下载小程序失败: 二维码格式不正确(应为 cnb下载小程序=<appId>)"))
+                    } else {
+                        DownloadMiniApp.download(this@MainActivity, appId, callback)
+                    }
                     null
                 }
                 else -> {
@@ -468,38 +530,22 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// 从 assets/jsapp 各小程序 config.json 读取小程序列表
+// 从 assets/jsapp 与沙盒 filesDir/jsapp 各小程序 config.json 读取小程序列表(下载/更新的小程序也纳入)
 fun Context.getMiniProgramsList(): List<MiniProgram> {
     return try {
-        // 从资源中读取JSON文件
-        val configResults = assets.list("jsapp")?.map { folder ->
-            try {
-                val jsonString = assets.open("jsapp/$folder/config.json").bufferedReader().use { it.readText() }
-                JSONObject(jsonString)
-            } catch (_: Exception) {
-                null
-            }
-        } ?: emptyList()
-
-        val miniPrograms = mutableListOf<MiniProgram>()
-
-        // 转换为MiniProgram对象
-        for (jsonObject in configResults) {
-            if (jsonObject == null) {
-                continue
-            }
-            val name = jsonObject.getString("name")
-
-            miniPrograms.add(MiniProgram(
-                appId = jsonObject.getString("appId"),
-                name = name,
-                versionCode = jsonObject.getInt("versionCode"),
-                versionName = jsonObject.getString("versionName"),
-                path = jsonObject.getString("path"),
-                updateManifestUrl = jsonObject.optString("updateManifestUrl", ""),
-            ))
+        // 汇总 appId: 内置资源(assets) + 沙盒已安装(filesDir, 下载/更新的小程序在此)
+        val appIds = linkedSetOf<String>()
+        assets.list("jsapp")?.forEach { if (it.isNotBlank()) appIds.add(it) }
+        File(filesDir, "jsapp").listFiles()?.forEach { dir ->
+            if (dir.isDirectory && !dir.name.startsWith(".")) appIds.add(dir.name)
         }
 
+        val miniPrograms = mutableListOf<MiniProgram>()
+        // getMiniProgram 优先读 filesDir(沙盒最新版), 回退 assets, 与运行时一致
+        for (appId in appIds) {
+            val mp = Dimina.getInstance().getMiniProgram(appId)
+            if (mp != null) miniPrograms.add(mp)
+        }
         miniPrograms
     } catch (e: Exception) {
         Log.e("MainActivity", "读取 config.json 出错: ${e.message}")

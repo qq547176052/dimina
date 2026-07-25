@@ -6,6 +6,7 @@
 //   2026-07-24 所有关闭 loading 处前加 console.log('[update] 关闭loading: ...') 日记, 便于定位误关弹窗的位置
 //   2026-07-24 下载完成文案改为"下载完成 是否更新"; 下载后弹确认框, 确认则经宿主 "应用更新" 事件装包+激活+冷重启(原 updateready 内置流程不再使用); 修正 loading 关闭时序避免误关后续弹窗
 //   2026-07-24 小程序更新合并为单步: 调用宿主 "更新小程序" 事件(下载+关闭+装包+激活+冷重启), 去掉原 "下载新小程序压缩包"→确认→"应用更新" 两步流程与下载后二次确认弹窗
+//   2026-07-25 新增 _downloadByScan: 扫一扫识别 "cnb下载小程序=<appId>" 时经宿主 "下载小程序" 事件下载并刷新列表
 module.exports = {
   // 将宿主管理扩展模块的 extBridge 调用封装为 Promise, 配合 async/await 消除回调嵌套
   // data 统一注入调用方 appId, 使宿主分辨是哪个小程序发起(更新场景即更新目标)
@@ -49,6 +50,22 @@ module.exports = {
       console.log('[update] 关闭loading: 检查更新异常', e)
       wx.hideLoading()
       wx.showToast({ title: '检查更新失败', icon: 'none', duration: 1000 })
+    }
+  },
+
+  // 扫码下载小程序: 识别到 "cnb下载小程序=<appId>" 时, 经宿主 "下载小程序" 事件下载并装包激活, 完成后刷新列表
+  async _downloadByScan(content) {
+    wx.showLoading({ title: '下载小程序中...', mask: true })
+    try {
+      await this._callAppList('下载小程序', { content })
+      console.log('[update] 关闭loading: 下载小程序结束')
+      wx.hideLoading()
+      wx.showToast({ title: '下载完成', icon: 'success' })
+      this._fetchList() // 刷新列表, 使新下载的小程序出现
+    } catch (e) {
+      console.log('[update] 关闭loading: 下载小程序异常', e)
+      wx.hideLoading()
+      wx.showToast({ title: (e && e.errMsg) || '下载失败', icon: 'none' })
     }
   },
 

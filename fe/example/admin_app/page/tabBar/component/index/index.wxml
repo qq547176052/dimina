@@ -137,9 +137,6 @@
       <view class="menu-item" bindtap="onScan">
         <text class="menu-item-text">扫一扫</text>
       </view>
-      <view class="menu-item" bindtap="onMenuAddFriend">
-        <text class="menu-item-text">添加好友</text>
-      </view>
     </view>
   </view>
 </view>
