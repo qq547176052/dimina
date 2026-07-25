@@ -7,6 +7,7 @@
 
 // 履历: 2026-07-24 新增 config.login(account, password)→config.登录(账号, 密码): 封装登录 API(内部 sha256 哈希 + 保存 token/user/userName), 供登录页与 token 过期时其它文件直接调用重新登录
 //   2026-07-25 新增 本地数据(模板)/读取本地数据()/保存本地数据(数据): 合并到单一对象; 读取同步返回本地整对象, 并异步经 兼容.宿主读取本地数据/宿主保存本地数据 读写宿主共享文件(module=本小程序 appId, 多小程序共享); 微信环境无 extBridge 时仅本地 storage
+//   2026-07-25 修复退出登录"清不干净/自动弹回首页": 保存本地数据 改为直接读 wx.getStorageSync(不再经 读取本地数据 触发异步宿主合并回写污染), 并返宿主推送 Promise(供 await 等清空成功再切页); 退出登录由 _logout 在清空成功后才 reLaunch 登录页
 const sha256 = require('./utils/sha256.js') // 纯 JS SHA-256(无第三方依赖)
 const 兼容 = require('./compatibility.js') // 运行环境兼容层(含 宿主读取本地数据/宿主保存本地数据)
 
@@ -41,15 +42,18 @@ var config = {
       const 数据 = wx.getStorageSync('本地数据')
       return Object.assign({}, this.本地数据, 数据 && typeof 数据 === 'object' ? 数据 : {})
     },
-    // 保存本地数据: 同步合并落盘本地并返合并对象; dimina 环境额外异步推送到宿主共享(多小程序共享), 微信环境仅本地
+    // 保存本地数据: 同步合并落盘本地, 返回宿主推送的 Promise(dimina) / resolved Promise(微信);
+    // 供"等清空成功再切页"等场景 await。注意直接读 wx.getStorageSync 而非 this.读取本地数据(),
+    // 以免触发 读取 的异步宿主合并回写副作用污染刚清空的值
     保存本地数据(数据) {
-      const 合并 = Object.assign({}, this.读取本地数据(), 数据)
+      const 现有 = wx.getStorageSync('本地数据')
+      const 合并 = Object.assign({}, this.本地数据, 现有 && typeof 现有 === 'object' ? 现有 : {}, 数据)
       wx.setStorageSync('本地数据', 合并) // 本地缓存(离线/降级即时可用)
       if (兼容.isDimina()) {
-        // dimina 宿主环境: 推送到宿主共享文件(多小程序共享)
-        兼容.宿主保存本地数据(合并).catch(() => {})
+        // dimina 宿主环境: 推送到宿主共享文件(多小程序共享), 返回 Promise 供 await
+        return 兼容.宿主保存本地数据(合并)
       }
-      return 合并
+      return Promise.resolve(合并)
     },
 }
 

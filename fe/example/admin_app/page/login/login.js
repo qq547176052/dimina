@@ -12,6 +12,7 @@
 //   2026-07-24 "保存账号密码" storage 键常量(是否保存/已保存的账号/已保存的密码)迁移至 config.js, 引用统一走 config
 //   2026-07-24 onLoad 自检: token 快过期(5分钟内)时用保存的账号密码调用 config.登录 自动刷新, 否则直接进首页
 //   2026-07-25 本地数据统一封装为整对象(config.读取本地数据/保存本地数据), 所有 storage 操作走该对象(单一键'本地数据')
+//   2026-07-25 新增 onShow: 每次显示登录页复位 loading=false, 解除登录按钮禁用, 避免残留登录中状态卡住按钮
 const config = require('../../config.js') // 后端配置(含 api登录链接/login 函数 与 storage 键常量)
 const HOME_PATH = '/page/tabBar/component/index/index'
 
@@ -83,6 +84,11 @@ Page({
       // 无保存的账号密码, 无法刷新, 直接进入首页
       wx.reLaunch({ url: HOME_PATH })
     }
+  },
+
+  // 每次显示页面时解除登录按钮禁用(复位 loading), 避免残留登录中状态卡住按钮
+  onShow() {
+    this.setData({ loading: false })
   },
 
   onAccountInput(e) {

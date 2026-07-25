@@ -9,6 +9,7 @@
 //   2026-07-24 onLoad 从 storage 的 user 对象回填抽屉信息: name→nickName, 首字→avatarText, role→onlineStatus(工程师/客户)
 //   2026-07-25 抽屉用户信息回显改用 config.读取本地数据().user 统一取 user(整对象)
 //   2026-07-25 版本号取值改 wx.getAccountInfoSync().miniProgram.version(原生微信与 dimina 统一), 不再用 getSystemInfoSync().appVersion; 新增 APP_VERSION 兜底(开发者工具/体验版 version 为空)
+//   2026-07-25 新增登录态守卫: 首页为宿主冷启动入口(覆盖 app.json 首屏登录页), onLoad 自检 token, 未登录直接 reLaunch 登录页, 修复"退出后冷启动仍显示已登录界面"
 
 const listMixin = require('./mixins/list.js')
 const swipeMixin = require('./mixins/swipe.js')
@@ -56,6 +57,13 @@ Page(Object.assign(
     },
 
     onLoad() {
+      // 登录态守卫: 首页是宿主冷启动入口(覆盖 app.json 首屏登录页), 必须自检登录态;
+      // token 为空(未登录/已退出)时跳登录页, 由登录页 onLoad 回填/自动刷新后跳回首页
+      const 本地 = config.读取本地数据()
+      if (!本地.token) {
+        wx.reLaunch({ url: '/page/login/login' })
+        return
+      }
 
       /*
         const accountInfo = wx.getAccountInfoSync();

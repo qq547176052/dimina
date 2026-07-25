@@ -50,6 +50,7 @@ import java.util.zip.ZipOutputStream
  *   2026-07-24 "应用更新" 装包前补抓 config.json 注入 zip: cnb 源 zip 仅含 main 目录内容, 缺根级 config.json 致 installPendingFromZip 校验未通过; 新增 ensureUpdateZipHasConfig 自 cnb 拉取 config.json 重新打包, 使校验(appId/versionCode)通过
  *   2026-07-24 "应用更新" 的更新压缩包清理由 installPendingFromZip 的 finally 负责(装包后即删除, 注入 config 后为 update.zip); 移除 MainActivity 内冗余删除(原因文件已被删而误报"删除失败")
  *   2026-07-25 新增共享本地数据扩展模块: 固定模块名 "小程序共享数据"(与前端 compatibility.js 对齐), 经 wx.extBridge 处理 保存本地数据/读取本地数据, 持久化到 filesDir/dimina_shared/local_data.json, 多小程序共享同一份登录态等数据; 前端 compatibility.js 以固定模块名 "小程序共享数据" 作 module 调用(只注册一次, 取代原按 appId 逐个注册)
+ *   2026-07-25 共享本地数据模块加外层 try/catch 兜底(防 callback 异常上抛崩溃)与脱敏诊断日志(保存/读取均打印键名与内容, 密码/token 仅记"是否设置+长度"不落明文), 便于排查 logout 等场景登录态是否真正清空
  *   2026-07-24 小程序更新合并为单步 "更新小程序": 下载 zip 后直接关闭小程序→装包(.pending)→激活→冷重启, 去掉原 "下载新小程序压缩包"+"应用更新" 两次 extBridge 调用; 抽出 downloadUpdateZip 落盘辅助(原 downloadMiniAppUpdate 仅落盘部分)供合并流程复用
  *   2026-07-25 接入非常驻小程序后台更新(upminiapp.kt): "拉起"时 UpMiniApp.onMiniAppStart 后台检查+下载; DiminaActivity.onDestroy 时 UpMiniApp.onMiniAppClose 静默装包激活(除 DEFAULT_APP_ID 外), 不重启宿主
  *   2026-07-25 新增"下载小程序"事件(downloadminiapp.kt): 扫一扫识别 "cnb下载小程序=<appId>" 后从 cnb 下载并静默装包激活; 小程序列表合并 assets 与沙盒(filesDir/jsapp), 使下载/更新的小程序均可见
@@ -139,23 +140,62 @@ class MainActivity : ComponentActivity() {
     // 任一小程序经 wx.extBridge(module="小程序共享数据") 都读写同一共享文件 filesDir/dimina_shared/local_data.json, 实现多小程序共享登录态等数据
     private fun registerLocalDataModule() {
         // 固定模块名, 只注册一次: 所有小程序读写同一份文件, 多小程序互通
+        // 外层 try/catch 兜底: callback 抛异常亦不向上传播导致崩溃; 各事件打脱敏诊断日志,
+        // 便于分析 logout 等场景 token/账号密码是否被真正清空(密码/token 仅记"是否设置+长度", 不落明文)
         Dimina.getInstance().registerExtModule("小程序共享数据") { event, data, callback ->
-            when (event) {
-                "保存本地数据" -> {
-                    saveSharedLocalData(data.optJSONObject("数据") ?: JSONObject())
-                    callback.onSuccess(JSONObject().apply { put("ok", true) })
-                    null
+            try {
+                when (event) {
+                    "保存本地数据" -> {
+                        val payload = data.optJSONObject("数据") ?: JSONObject()
+                        LogUtils.i(TAG, "共享数据[保存] event=$event 键=[${keysOf(payload)}] 内容=${maskSecret(payload)}")
+                        saveSharedLocalData(payload)
+                        callback.onSuccess(JSONObject().apply { put("ok", true) })
+                        null
+                    }
+                    "读取本地数据" -> {
+                        val loaded = loadSharedLocalData()
+                        LogUtils.i(TAG, "共享数据[读取] event=$event 键=[${keysOf(loaded)}] 有数据=${loaded.length() > 0}")
+                        callback.onSuccess(JSONObject().apply { put("数据", loaded) })
+                        null
+                    }
+                    else -> {
+                        LogUtils.w(TAG, "共享数据[未知事件] event=$event data=$data")
+                        callback.onFail(failMsg("未知事件: $event"))
+                        null
+                    }
                 }
-                "读取本地数据" -> {
-                    callback.onSuccess(JSONObject().apply { put("数据", loadSharedLocalData()) })
-                    null
-                }
-                else -> {
-                    callback.onFail(failMsg("未知事件: $event"))
-                    null
-                }
+            } catch (e: Exception) {
+                LogUtils.e(TAG, "共享数据处理异常 event=$event: ${e.message}")
+                callback.onFail(failMsg("共享数据处理失败: ${e.message}"))
+                null
             }
         }
+    }
+
+    // 取 JSONObject 所有键名(仅键, 不打印值), 用于日志标识本次写入/读出了哪些字段
+    private fun keysOf(obj: JSONObject): String {
+        val keys = mutableListOf<String>()
+        obj.keys().forEach { keys.add(it) }
+        return keys.joinToString(",")
+    }
+
+    // 生成脱敏日志串: 密码/token/口令 仅记"是否设置+长度", 其余字段打印原值; 避免敏感信息明文落盘
+    private fun maskSecret(obj: JSONObject): String {
+        val sb = StringBuilder()
+        val secretKeys = setOf("密码", "token", "口令", "password")
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val k = keys.next()
+            val v = obj.optString(k, "")
+            val shown = if (k in secretKeys) {
+                if (v.isBlank()) "空" else "已设置(${v.length}字符)"
+            } else {
+                v
+            }
+            if (sb.isNotEmpty()) sb.append(", ")
+            sb.append("$k=$shown")
+        }
+        return sb.toString()
     }
 
     // 跟踪前台 Activity, 供 AppList 扩展模块拉起(其他)小程序使用
