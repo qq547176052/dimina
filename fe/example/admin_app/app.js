@@ -1,3 +1,4 @@
+require('./compatibility.js') // 运行环境兼容层: 缺失时补齐 wx.extBridge(见 compatibility.js)
 const openIdUrl = require('./config').openIdUrl
 
 App({

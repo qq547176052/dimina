@@ -88,6 +88,10 @@ dependencies {
 }
 
 // Add task to copy shared jsapp files to Android app's assets folder
+// 排除列表: 不打包进 assets 的小程序 appId(取自 gradle.properties 的 excludeJsApps, 逗号分隔); 留空=全部复制
+val excludedJsApps = (project.findProperty("excludeJsApps") as? String)
+    ?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
+    ?: emptyList()
 tasks.register<Copy>("copySharedJsappToAssets") {
     // Delete all files except .gitkeep before copying
     doFirst {
@@ -104,6 +108,8 @@ tasks.register<Copy>("copySharedJsappToAssets") {
     from("${rootProject.projectDir}/../shared/jsapp")
     into("${rootProject.projectDir}/app_js/src/main/assets/jsapp")
     includeEmptyDirs = false
+    // 排除指定小程序: 对应 appId 目录及其内容均不复制进 assets
+    excludedJsApps.forEach { appId -> exclude(appId, "$appId/**") }
 }
 
 // Make the preBuild task depend on the copy tasks

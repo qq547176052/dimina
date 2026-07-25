@@ -10,6 +10,7 @@ import java.io.File
  * 履历:
  *   2026-07-22 创建, 从 App.kt/PushModule.kt 汇集默认配置, 统一存放于 config 目录
  *   2026-07-24 新增分类: 小程序远程更新(cnb 仓库 raw), 含 cnb 源地址/鉴权与下载目录
+ *   2026-07-25 共享本地数据: 不再用固定模块名, 宿主按每个小程序 appId 注册同一处理器(路由 module=appId), 读写 filesDir/dimina_shared/local_data.json 供多小程序共享
  */
 object AppConfig {
     // ---- 默认启动小程序 ----
@@ -19,7 +20,7 @@ object AppConfig {
     // ---- 列表排除的小程序 ----
     /** 小程序管理扩展模块(获取列表)不展示的小程序 appId(含默认启动小程序自身), 按实际环境维护 */
     val EXCLUDED_LIST_APP_IDS = setOf(
-        "2145"
+        "wxd58cedf6d1e1c52c"
 //        "wx1c01b35002d3ba14",
         // "wx6d707864656d6f01",
         // "wx92269e3b2f304afc",

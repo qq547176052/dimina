@@ -1,6 +1,7 @@
 /* page/login/login.wxss */
 /* 简介: 登录页样式, 居中卡片式表单, 主色与首页抽屉一致(#07C160) */
-/* 履历: 2026-07-23 新建 */
+/* 履历: 2026-07-23 新建; 2026-07-24 新增登录页"保存账号密码"开关样式 */
+
 .login-wrap {
   min-height: 100vh;
   background: #F8F8F8;
@@ -54,6 +55,22 @@
 
 .login-ph {
   color: #B8BDC4;
+}
+
+.login-save {
+  display: flex;
+  align-items: center;
+  margin: 4rpx 8rpx 28rpx;
+}
+
+.login-save-switch {
+  transform: scale(0.8);
+  margin-right: 12rpx;
+}
+
+.login-save-label {
+  font-size: 28rpx;
+  color: #1F2329;
 }
 
 .login-btn {

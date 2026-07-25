@@ -1281,6 +1281,11 @@ class DiminaActivity : ComponentActivity() {
 
     private fun onPageReady() {
         pageReadyCallback?.invoke()
+        // custom:true 时，页面内自定义 tabBar（.tabbar-shell）在 dimina 下不可点击，
+        // 改用外层可点击的原生 tabBar，隐藏 WebView 内的自定义 tabBar 避免重复。
+        if (tabBarConfigState.value?.custom == true) {
+            hideWebCustomTabBar(this.webView)
+        }
     }
 
     private fun onTabWebViewReady(index: Int, webView: WebView) {
@@ -1338,6 +1343,42 @@ class DiminaActivity : ComponentActivity() {
     private fun onTabPageReady(index: Int) {
         val state = tabPageStates[index] ?: return
         state.pageReadyCallback?.invoke()
+        // custom:true 时，页面内自定义 tabBar（.tabbar-shell）在 dimina 下不可点击，
+        // 改用外层可点击的原生 tabBar，隐藏各 tab 页 WebView 内的自定义 tabBar 避免重复。
+        if (tabBarConfigState.value?.custom == true) {
+            hideWebCustomTabBar(state.webView)
+        }
+    }
+
+    /**
+     * 向小程序 WebView 注入样式，彻底隐藏页面内手写的自定义 tabBar（根节点 .tabbar-shell）。
+     * 用于 custom:true 场景：dimina 外层原生 tabBar 可点击，而 WebView 内自定义 tabBar 不可点击，
+     * 二者并存会导致重复显示，故隐藏后者只保留前者。
+     *
+     * 使用 MutationObserver 持续监听，覆盖页面延迟挂载 / 切换 tab 重新挂载等情况，确保彻底隐藏。
+     */
+    private fun hideWebCustomTabBar(webView: WebView?) {
+        webView ?: return
+        val script = """
+            (function () {
+                function hideAll() {
+                    var els = document.querySelectorAll('.tabbar-shell');
+                    for (var i = 0; i < els.length; i++) {
+                        var el = els[i];
+                        el.style.setProperty('display', 'none', 'important');
+                        el.style.setProperty('visibility', 'hidden', 'important');
+                        el.style.setProperty('height', '0', 'important');
+                        el.style.setProperty('pointer-events', 'none', 'important');
+                    }
+                }
+                hideAll();
+                if (window.__diminaHideCustomTabBar) return;
+                window.__diminaHideCustomTabBar = true;
+                var observer = new MutationObserver(function () { hideAll(); });
+                observer.observe(document.documentElement, { childList: true, subtree: true });
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(script, null)
     }
 
     private fun onNativeOverlayReady(overlay: FrameLayout) {

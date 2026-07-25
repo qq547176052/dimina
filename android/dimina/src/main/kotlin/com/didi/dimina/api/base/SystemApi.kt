@@ -119,9 +119,14 @@ class SystemApi : BaseApiHandler() {
             }
 
             GET_ACCOUNT_INFO_SYNC -> {
-                // 返回当前小程序账号信息(含 appId), 供前端以自身 appId 作为 extBridge 模块名调用宿主
+                // 返回当前小程序账号信息(含 appId / version), 供前端以自身 appId 作为 extBridge 模块名调用宿主, 并取 miniProgram.version 作为版本号
                 SyncResult(JSValue.createObject(JSONObject().apply {
-                    put("miniProgram", JSONObject().apply { put("appId", appId) })
+                    put("miniProgram", JSONObject().apply {
+                        put("appId", appId)
+                        // 沙盒真实已安装版本名(更新后随之变化); 与 getSystemInfoSync.appVersion 同源, 使两端统一走 miniProgram.version
+                        put("version", activity.installedVersionName)
+                        put("envVersion", "release")
+                    })
                     put("errMsg", "$GET_ACCOUNT_INFO_SYNC:ok")
                 }.toString()))
             }

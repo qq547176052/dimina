@@ -1,9 +1,10 @@
 <!--page/login/login.wxml-->
 <!--简介: 登录页视图, 账号密码输入 + 登录按钮, 风格与首页一致(微信绿)-->
-<!--履历: 2026-07-23 新建-->
+<!--履历: 2026-07-23 新建; 2026-07-24 新增"保存账号密码"开关(默认开, 关闭则不记住)-->
+
 <view class="login-wrap" style="padding-top: calc({{statusBarHeight}}px + 120rpx);">
-  <view class="login-logo">管</view>
-  <text class="login-title">管理后台</text>
+  <view class="login-logo">JS</view>
+  <text class="login-title">骏盛</text>
   <text class="login-sub">请登录后使用</text>
 
   <view class="login-form">
@@ -22,6 +23,10 @@
       value="{{password}}"
       bindinput="onPasswordInput"
     />
+    <view class="login-save">
+      <switch class="login-save-switch" checked="{{saveAccount}}" bindchange="onToggleSave" color="#07C160" />
+      <text class="login-save-label" bindtap="onToggleSave">保存账号密码</text>
+    </view>
     <button class="login-btn {{loading ? 'disabled' : ''}}" bindtap="onLogin">{{loading ? '登录中...' : '登 录'}}</button>
   </view>
 </view>

@@ -1,6 +1,12 @@
+// 首页: 展示 WeUI 组件示例入口; 底部 footer 展示版本号
+// 履历:
+//   2026-07-25 新增 版本号: onLoad 经 wx.getSystemInfoSync().appVersion 取宿主注入的版本(无注入时回退 APP_VERSION 兜底), footer 展示 v{{version}}
+const APP_VERSION = '1.0.0' // 兜底版本号(无宿主 appVersion 注入时使用)
+
 Page({
   mixins: [require('../mixin/common')],
   data: {
+    version: '',
     list: [
       {
         id: 'form',
@@ -46,6 +52,17 @@ Page({
     this.setData({
       list,
     });
+  },
+  onLoad() {
+    // 版本号: 优先取宿主在 getSystemInfoSync 中注入的 appVersion, 无则回退兜底值
+    let v = ''
+    try {
+      const sys = (typeof wx.getSystemInfoSync === 'function') ? wx.getSystemInfoSync() : {}
+      v = (sys && sys.appVersion) || APP_VERSION
+    } catch (e) {
+      v = APP_VERSION
+    }
+    this.setData({ version: v })
   },
   changeTheme() {
     const theme = this.data.theme === 'light' ? 'dark' : 'light';

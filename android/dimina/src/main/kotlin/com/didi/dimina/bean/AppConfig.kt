@@ -40,6 +40,7 @@ data class TabBarConfig(
     val selectedColor: String = "#1890ff",
     val borderStyle: String = "black",
     val backgroundColor: String = "#FFFFFF",
+    val custom: Boolean = false,
     val list: List<TabBarItem> = emptyList()
 )
 

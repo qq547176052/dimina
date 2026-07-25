@@ -49,6 +49,7 @@ import java.util.zip.ZipOutputStream
  *   2026-07-24 "应用更新" 第三步改为重建 LAUNCHER(MainActivity, FLAG_ACTIVITY_NEW_TASK|CLEAR_TASK), 经 onCreate→launchDefaultMiniProgram 冷重启拉起最新版本; 不再用已 finish 的 MainActivity 实例作 startMiniProgram 上下文(onCreate 不会重跑且上下文已销毁)
  *   2026-07-24 "应用更新" 装包前补抓 config.json 注入 zip: cnb 源 zip 仅含 main 目录内容, 缺根级 config.json 致 installPendingFromZip 校验未通过; 新增 ensureUpdateZipHasConfig 自 cnb 拉取 config.json 重新打包, 使校验(appId/versionCode)通过
  *   2026-07-24 "应用更新" 的更新压缩包清理由 installPendingFromZip 的 finally 负责(装包后即删除, 注入 config 后为 update.zip); 移除 MainActivity 内冗余删除(原因文件已被删而误报"删除失败")
+ *   2026-07-25 新增共享本地数据扩展模块: 固定模块名 "小程序共享数据"(与前端 compatibility.js 对齐), 经 wx.extBridge 处理 保存本地数据/读取本地数据, 持久化到 filesDir/dimina_shared/local_data.json, 多小程序共享同一份登录态等数据; 前端 compatibility.js 以固定模块名 "小程序共享数据" 作 module 调用(只注册一次, 取代原按 appId 逐个注册)
  *   2026-07-24 小程序更新合并为单步 "更新小程序": 下载 zip 后直接关闭小程序→装包(.pending)→激活→冷重启, 去掉原 "下载新小程序压缩包"+"应用更新" 两次 extBridge 调用; 抽出 downloadUpdateZip 落盘辅助(原 downloadMiniAppUpdate 仅落盘部分)供合并流程复用
  */
 class MainActivity : ComponentActivity() {
@@ -97,10 +98,60 @@ class MainActivity : ComponentActivity() {
         finish()
     }
 
-    // 统一注册入口: 前台 Activity 跟踪 + AppList 扩展模块(列表/拉起/删除)
+    // 统一注册入口: 前台 Activity 跟踪 + AppList 扩展模块(列表/拉起/删除) + 共享本地数据模块
     private fun registerExtensions() {
         registerActivityLifecycle()
         registerAppListModule()
+        registerLocalDataModule()
+    }
+
+    // ---- 共享本地数据(经 extBridge 存到宿主, 多小程序共享同一份) ----
+    // 单一共享 JSON 文件(filesDir/dimina_shared/local_data.json), 所有小程序读写同一对象, 实现登录态等数据共享
+    private fun sharedDataFile(): File {
+        val dir = File(filesDir, "dimina_shared").apply { mkdirs() }
+        return File(dir, "local_data.json")
+    }
+
+    private fun loadSharedLocalData(): JSONObject {
+        val f = sharedDataFile()
+        if (!f.exists()) return JSONObject()
+        return try {
+            JSONObject(f.readText())
+        } catch (e: Exception) {
+            LogUtils.e(TAG, "读取共享本地数据失败: ${e.message}")
+            JSONObject()
+        }
+    }
+
+    private fun saveSharedLocalData(obj: JSONObject) {
+        try {
+            sharedDataFile().writeText(obj.toString())
+        } catch (e: Exception) {
+            LogUtils.e(TAG, "保存共享本地数据失败: ${e.message}")
+        }
+    }
+
+    // 共享本地数据扩展模块: 固定模块名 "小程序共享数据"(前端 compatibility.js 同名校验),
+    // 任一小程序经 wx.extBridge(module="小程序共享数据") 都读写同一共享文件 filesDir/dimina_shared/local_data.json, 实现多小程序共享登录态等数据
+    private fun registerLocalDataModule() {
+        // 固定模块名, 只注册一次: 所有小程序读写同一份文件, 多小程序互通
+        Dimina.getInstance().registerExtModule("小程序共享数据") { event, data, callback ->
+            when (event) {
+                "保存本地数据" -> {
+                    saveSharedLocalData(data.optJSONObject("数据") ?: JSONObject())
+                    callback.onSuccess(JSONObject().apply { put("ok", true) })
+                    null
+                }
+                "读取本地数据" -> {
+                    callback.onSuccess(JSONObject().apply { put("数据", loadSharedLocalData()) })
+                    null
+                }
+                else -> {
+                    callback.onFail(failMsg("未知事件: $event"))
+                    null
+                }
+            }
+        }
     }
 
     // 跟踪前台 Activity, 供 AppList 扩展模块拉起(其他)小程序使用
