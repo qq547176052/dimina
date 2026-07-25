@@ -15,7 +15,7 @@ import java.io.File
 object AppConfig {
     // ---- 默认启动小程序 ----
     /** 默认启动小程序 appId, DiminaActivity 作为 LAUNCHER 时兜底使用 */
-    const val DEFAULT_APP_ID = "wxd58cedf6d1e1c52c"
+    const val DEFAULT_APP_ID = "wxd58cedf6d1e1c52c"//常驻小程序
 
     // ---- 列表排除的小程序 ----
     /** 小程序管理扩展模块(获取列表)不展示的小程序 appId(含默认启动小程序自身), 按实际环境维护 */

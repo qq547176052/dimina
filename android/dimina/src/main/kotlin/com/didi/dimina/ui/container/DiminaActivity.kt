@@ -1805,6 +1805,10 @@ class DiminaActivity : ComponentActivity() {
         coldRestartMiniProgram(updatedMiniProgram)
     }
 
+    // 当前小程序 appId, 供宿主监听小程序关闭时识别更新目标; 未初始化(如冷启动失败)返回空串
+    val appId: String
+        get() = miniProgramState.value?.appId ?: ""
+
     // 仅关闭当前小程序(释放 JS 运行时与文件占用), 不重新打开; 供宿主"应用更新"流程在替换资源文件前调用, 避免文件被占用导致解压失败
     // onClosed 在关闭与运行时清理完成后于主线程回调, 调用方据此再继续装包
     fun closeMiniProgramOnly(onClosed: () -> Unit) {

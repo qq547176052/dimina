@@ -51,6 +51,7 @@ import java.util.zip.ZipOutputStream
  *   2026-07-24 "应用更新" 的更新压缩包清理由 installPendingFromZip 的 finally 负责(装包后即删除, 注入 config 后为 update.zip); 移除 MainActivity 内冗余删除(原因文件已被删而误报"删除失败")
  *   2026-07-25 新增共享本地数据扩展模块: 固定模块名 "小程序共享数据"(与前端 compatibility.js 对齐), 经 wx.extBridge 处理 保存本地数据/读取本地数据, 持久化到 filesDir/dimina_shared/local_data.json, 多小程序共享同一份登录态等数据; 前端 compatibility.js 以固定模块名 "小程序共享数据" 作 module 调用(只注册一次, 取代原按 appId 逐个注册)
  *   2026-07-24 小程序更新合并为单步 "更新小程序": 下载 zip 后直接关闭小程序→装包(.pending)→激活→冷重启, 去掉原 "下载新小程序压缩包"+"应用更新" 两次 extBridge 调用; 抽出 downloadUpdateZip 落盘辅助(原 downloadMiniAppUpdate 仅落盘部分)供合并流程复用
+ *   2026-07-25 接入非常驻小程序后台更新(upminiapp.kt): "拉起"时 UpMiniApp.onMiniAppStart 后台检查+下载; DiminaActivity.onDestroy 时 UpMiniApp.onMiniAppClose 静默装包激活(除 DEFAULT_APP_ID 外), 不重启宿主
  */
 class MainActivity : ComponentActivity() {
 
@@ -166,6 +167,11 @@ class MainActivity : ComponentActivity() {
             override fun onActivitySaveInstanceState(a: Activity, o: Bundle) {}
             override fun onActivityDestroyed(a: Activity) {
                 if (currentActivity == a) currentActivity = null
+                // 非常驻小程序关闭: 若已下载完整更新包则后台静默装包激活(不重启宿主)
+                if (a is DiminaActivity) {
+                    val id = a.appId
+                    if (id.isNotBlank()) UpMiniApp.onMiniAppClose(this@MainActivity, id)
+                }
             }
         })
     }
@@ -429,6 +435,8 @@ class MainActivity : ComponentActivity() {
                         val mp = Dimina.getInstance().getMiniProgram(appId)
                         if (mp != null && currentActivity != null) {
                             Dimina.getInstance().startMiniProgram(currentActivity!!, mp)
+                            // 非常驻小程序: 拉起即后台检查更新并下载到缓存(关闭时再静默装包)
+                            UpMiniApp.onMiniAppStart(this@MainActivity, appId)
                             callback.onSuccess(JSONObject())
                         } else {
                             callback.onFail(failMsg("拉起失败: appId=$appId 未找到或无可用页面"))
