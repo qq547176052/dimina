@@ -9,11 +9,14 @@ package-lock.json
 pnpm-lock.yaml
 coverage
 example/*
+
 !example/base
 !example/subpackages
 !example/weui
 !example/vant
 !example/taro-todo
 !example/mpx-demo
+
+!example/js_rlgl
 # 首页
 !example/admin_app

@@ -1,0 +1,104 @@
+<!-- 抓拍记录 tab 页: 人脸抓拍记录列表; 自定义样式(不依赖 WeUI 组件类); 右侧筛选抽屉(右到左滑开/左到右滑关); 保留 ensureToken 校验登录态 -->
+<view class="page"
+  bindtouchstart="onPageTouchStart"
+  bindtouchend="onPageTouchEnd"
+>
+    <!-- 顶部栏: 标题 + 筛选入口(显示已选条件数) -->
+    <view class="topbar">
+        <text class="topbar-title">抓拍记录</text>
+        <view class="filter-btn" bindtap="openFilter">
+            <text class="filter-btn-text">筛选</text>
+            <text wx:if="{{filterCount > 0}}" class="filter-badge">{{filterCount}}</text>
+        </view>
+    </view>
+
+    <scroll-view scroll-y class="records-scroll" lower-threshold="120" refresher-enabled refresher-triggered="{{refreshing}}" bindrefresherrefresh="onRefresh" bindscrolltolower="onLoadMore">
+
+        <view wx:if="{{loading && !list.length}}" class="status-tip">加载中...</view>
+        <view wx:elif="{{loadError && !list.length}}" class="status-tip status-error" bindtap="reloadList">{{loadError}}（点击重试）</view>
+        <view wx:elif="{{!loading && !list.length}}" class="status-tip">暂无抓拍记录</view>
+
+        <view class="record-list">
+            <view wx:for="{{list}}" wx:key="id" class="record-card">
+                <image class="card-avatar" src="{{item.faceDisplayUrl || placeholderAvatar}}" mode="aspectFill"/>
+                <view class="card-body">
+                    <view class="card-name">{{item.name || '未识别'}}</view>
+                    <view class="card-row"><text class="card-label">时间</text><text class="card-value">{{item.time || '-'}}</text></view>
+                    <view class="card-row"><text class="card-label">摄像头</text><text class="card-value">{{item.cameraLabel || '-'}}</text></view>
+                    <view class="card-row"><text class="card-label">类型</text><text class="card-value">{{item.faceLibraryLabel}}</text></view>
+                </view>
+                <button class="card-btn" size="mini" disabled="{{submitting}}" bindtap="onAdd" data-id="{{item.id}}">入库</button>
+            </view>
+        </view>
+
+        <view wx:if="{{loadingMore}}" class="status-tip status-footer">加载中...</view>
+        <view wx:elif="{{list.length && hasMore}}" class="status-tip status-footer">上拉加载更多</view>
+        <view wx:elif="{{list.length}}" class="status-tip status-footer">共 {{total}} 条</view>
+    </scroll-view>
+
+    <!-- 右侧筛选抽屉: 右到左滑开(页面级), 抽屉内左到右滑关 -->
+    <view class="filter-mask {{filterOpen ? 'show' : ''}}" bindtap="closeFilter" bindtouchstart="onDrawerTouchStart" bindtouchend="onDrawerTouchEnd">
+        <view class="filter-panel" catchtap="noop">
+            <view class="filter-header">
+                <text class="filter-title">筛选条件</text>
+                <view class="filter-close" catchtap="closeFilter">×</view>
+            </view>
+            <scroll-view scroll-y class="filter-body">
+                <view class="filter-field">
+                    <text class="filter-label">姓名</text>
+                    <input class="filter-input" placeholder="模糊匹配姓名" value="{{filters.name}}" data-field="name" bindinput="onFilterInput"/>
+                </view>
+                <view class="filter-field">
+                    <text class="filter-label">摄像头</text>
+                    <input class="filter-input" placeholder="模糊匹配摄像头别名" value="{{filters.alias}}" data-field="alias" bindinput="onFilterInput"/>
+                </view>
+                <view class="filter-field">
+                    <text class="filter-label">人员类型</text>
+                    <picker mode="selector" range="{{faceLibraryFilterOptions}}" range-key="label" value="{{filterTypeIndex}}" bindchange="onFilterTypePick">
+                        <view class="filter-picker">{{faceLibraryFilterOptions[filterTypeIndex].label}}</view>
+                    </picker>
+                </view>
+                <view class="filter-field">
+                    <text class="filter-label">开始时间</text>
+                    <picker mode="date" value="{{filters.startTime}}" bindchange="onFilterDate" data-field="startTime">
+                        <view class="filter-picker">{{filters.startTime || '不限'}}</view>
+                    </picker>
+                </view>
+                <view class="filter-field">
+                    <text class="filter-label">结束时间</text>
+                    <picker mode="date" value="{{filters.endTime}}" bindchange="onFilterDate" data-field="endTime">
+                        <view class="filter-picker">{{filters.endTime || '不限'}}</view>
+                    </picker>
+                </view>
+            </scroll-view>
+            <view class="filter-actions">
+                <view class="filter-reset" bindtap="resetFilter">重置</view>
+                <view class="filter-apply" bindtap="applyFilter">确定</view>
+            </view>
+        </view>
+    </view>
+
+    <!-- 添加人脸库弹窗 -->
+    <view wx:if="{{formVisible}}" class="modal-mask" catchtap="closeForm" catchtouchmove="stopPropagation">
+        <view class="modal-box" catchtap="stopPropagation">
+            <view class="modal-title">添加人脸库</view>
+            <image class="modal-avatar" src="{{formPreviewUrl || placeholderAvatar}}" mode="aspectFill"/>
+            <view class="modal-form">
+                <view class="modal-field">
+                    <text class="field-label">姓名</text>
+                    <input class="field-input" placeholder="请输入姓名" maxlength="50" value="{{formName}}" bindinput="onNameInput"/>
+                </view>
+                <view class="modal-field">
+                    <text class="field-label">人员类型</text>
+                    <picker mode="selector" range="{{faceLibraryOptions}}" range-key="label" value="{{formTypeIndex}}" bindchange="onTypePick">
+                        <view class="field-picker">{{faceLibraryOptions[formTypeIndex].label}}</view>
+                    </picker>
+                </view>
+            </view>
+            <view class="modal-actions">
+                <button class="modal-btn modal-btn-cancel" size="mini" disabled="{{submitting}}" bindtap="closeForm">取消</button>
+                <button class="modal-btn modal-btn-submit" size="mini" disabled="{{submitting}}" bindtap="submitAdd">{{submitting ? '提交中...' : '确认入库'}}</button>
+            </view>
+        </view>
+    </view>
+</view>

@@ -1,0 +1,318 @@
+/* 抓拍记录页: 完全自定义样式, 不依赖 WeUI 组件类 */
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #f5f5f5;
+}
+/* 滚动区占满剩余高度 */
+.records-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---- 顶部栏 ---- */
+.topbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 28rpx;
+  background: #fff;
+  border-bottom: 1rpx solid #eee;
+}
+.topbar-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+.filter-btn {
+  display: flex;
+  align-items: center;
+  padding: 8rpx 22rpx;
+  background: #07c160;
+  border-radius: 28rpx;
+}
+.filter-btn-text {
+  font-size: 13px;
+  color: #fff;
+}
+.filter-badge {
+  margin-left: 8rpx;
+  min-width: 28rpx;
+  height: 28rpx;
+  line-height: 28rpx;
+  text-align: center;
+  padding: 0 6rpx;
+  border-radius: 14rpx;
+  background: #fff;
+  color: #07c160;
+  font-size: 11px;
+}
+
+/* ---- 右侧筛选抽屉 ---- */
+.filter-mask {
+  position: fixed;
+  left: 0; right: 0; top: 0; bottom: 0;
+  background: rgba(0,0,0,.4);
+  z-index: 200;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .3s ease, visibility .3s ease;
+  display: flex;
+  justify-content: flex-end;
+  touch-action: none;
+}
+.filter-mask.show {
+  opacity: 1;
+  visibility: visible;
+}
+.filter-panel {
+  width: 78%;
+  height: 100%;
+  background: #fff;
+  transform: translateX(100%);
+  transition: transform .3s ease;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+.filter-mask.show .filter-panel {
+  transform: translateX(0);
+}
+.filter-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28rpx 32rpx;
+  border-bottom: 1rpx solid #eee;
+}
+.filter-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+.filter-close {
+  width: 56rpx;
+  height: 56rpx;
+  line-height: 52rpx;
+  text-align: center;
+  font-size: 40rpx;
+  color: #999;
+}
+.filter-body {
+  flex: 1;
+  min-height: 0;
+  padding: 24rpx 32rpx;
+  box-sizing: border-box;
+}
+.filter-field {
+  margin-bottom: 28rpx;
+}
+.filter-label {
+  display: block;
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 10rpx;
+}
+.filter-input,
+.filter-picker {
+  height: 84rpx;
+  line-height: 84rpx;
+  padding: 0 20rpx;
+  border: 1px solid #ddd;
+  border-radius: 10rpx;
+  font-size: 14px;
+  color: #333;
+  background: #fafafa;
+  box-sizing: border-box;
+}
+.filter-picker::after { content: ''; }
+.filter-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 16rpx;
+  padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid #eee;
+}
+.filter-reset,
+.filter-apply {
+  flex: 1;
+  height: 84rpx;
+  line-height: 84rpx;
+  text-align: center;
+  border-radius: 12rpx;
+  font-size: 15px;
+}
+.filter-reset {
+  background: #f2f3f5;
+  color: #666;
+}
+.filter-apply {
+  background: #07c160;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ---- 状态提示 ---- */
+.status-tip {
+  text-align: center;
+  color: #999;
+  font-size: 13px;
+  padding: 40px 0;
+}
+.status-error { color: #e64340; }
+.status-footer { padding: 16px 0 8px; }
+
+/* ---- 记录列表 ---- */
+.record-list {
+  padding: 10px 12px 20px;
+}
+.record-card {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-radius: 14rpx;
+  padding: 20rpx 24rpx;
+  margin-bottom: 16rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0,0,0,.05);
+}
+.card-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 12rpx;
+  flex-shrink: 0;
+  background: #eee;
+}
+.card-body {
+  flex: 1;
+  min-width: 0;
+  margin-left: 22rpx;
+}
+.card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4rpx;
+}
+.card-row {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  line-height: 1.9;
+  color: #888;
+}
+.card-label {
+  flex-shrink: 0;
+  color: #bbb;
+  margin-right: 6rpx;
+}
+.card-value {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-btn {
+  flex-shrink: 0;
+  width: 72px;
+  margin: 0;
+  padding: 0;
+  height: 56rpx;
+  line-height: 56rpx;
+  font-size: 13px;
+  border-radius: 28rpx;
+  border: none;
+  background: #07c160;
+  color: #fff;
+  font-weight: 500;
+  align-self: flex-end;
+  box-shadow: 0 4rpx 16rpx rgba(7,193,96,.25);
+}
+.card-btn::after { border: none; }
+.card-btn::after { border: none; }
+
+/* ---- 弹窗 ---- */
+.modal-mask {
+  position: fixed;
+  left: 0; right: 0; top: 0; bottom: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32rpx;
+  touch-action: none;
+}
+.modal-box {
+  width: 100%;
+  max-width: 600rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 36rpx 28rpx 28rpx;
+}
+.modal-title {
+  text-align: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 20rpx;
+}
+.modal-avatar {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 16rpx;
+  display: block;
+  margin: 0 auto 28rpx;
+  background: #eee;
+}
+.modal-form { margin-bottom: 24rpx; }
+.modal-field { margin-bottom: 20rpx; }
+.field-label {
+  display: block;
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 8rpx;
+}
+.field-input,
+.field-picker {
+  height: 84rpx;
+  line-height: 84rpx;
+  padding: 0 20rpx;
+  border: 1px solid #ddd;
+  border-radius: 10rpx;
+  font-size: 14px;
+  color: #333;
+  box-sizing: border-box;
+  background: #fafafa;
+}
+.field-picker::after { content: ''; }
+.modal-actions {
+  display: flex;
+  gap: 16rpx;
+}
+.modal-btn {
+  flex: 1;
+  height: 80rpx;
+  line-height: 80rpx;
+  font-size: 15px;
+  border-radius: 12rpx;
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+.modal-btn::after { border: none; }
+.modal-btn-cancel {
+  background: #f2f3f5;
+  color: #666;
+}
+.modal-btn-submit {
+  background: linear-gradient(135deg, #07c160, #06ad56);
+  color: #fff;
+  font-weight: 600;
+}

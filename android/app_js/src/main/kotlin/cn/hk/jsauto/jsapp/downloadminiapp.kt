@@ -1,6 +1,8 @@
 package cn.hk.jsauto.jsapp
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Base64
 import com.didi.dimina.Dimina
 import com.didi.dimina.api.ext.ExtCallback
@@ -24,10 +26,14 @@ import java.util.zip.ZipOutputStream
  * 履历:
  *   2026-07-25 新建, 实现扫码下载小程序: parseAppIdFromQr 解析二维码 / download 下载+装包激活(不重启宿主)
  *   2026-07-25 download 改为强制装包(activatePendingUpdate force=true): 扫码下载为显式安装, 覆盖安装不受版本守卫限制, 保证每次扫码都能装到(已安装同版本也不再跳过)
+ *   2026-07-25 download 的 onSuccess/onFail 经 mainHandler 切回主线程投递(对齐 MainActivity 跨线程 extBridge 回调规约): 原直接在后台线程回调, 致 JS 成功处理器及其链式 _fetchList/获取列表 均在后台线程投递桥接结果, 列表刷新结果丢失 → 新下载小程序不显示
  */
 object DownloadMiniApp {
 
     private const val TAG = "DownloadMiniApp"
+
+    // 主线程 Handler: 后台线程(网络/解压)完成后, 经此把 extBridge 回调切回主线程投递(与 MainActivity.mainHandler 规约一致)
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     // 二维码内容前缀: "cnb下载小程序=<appId>"
     private const val QR_PREFIX = "cnb下载小程序="
@@ -65,10 +71,10 @@ object DownloadMiniApp {
                 val activated = RemoteUpdateManager.activatePendingUpdate(context, appId, force = true)
                 LogUtils.i(TAG, "下载小程序: 装包激活=$activated appId=$appId")
                 LogUtils.i(TAG, "下载小程序: 完成 appId=$appId")
-                callback.onSuccess(JSONObject().apply { put("appId", appId) })
+                mainHandler.post { callback.onSuccess(JSONObject().apply { put("appId", appId) }) }
             } catch (e: Exception) {
                 LogUtils.e(TAG, "下载小程序异常 appId=$appId: ${e.message}")
-                callback.onFail(JSONObject().apply { put("errMsg", "下载小程序失败: ${e.message}") })
+                mainHandler.post { callback.onFail(JSONObject().apply { put("errMsg", "下载小程序失败: ${e.message}") }) }
             }
         }.start()
     }
