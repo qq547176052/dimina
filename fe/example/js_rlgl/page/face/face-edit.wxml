@@ -7,6 +7,11 @@
             <view class="photo-tip">{{previewUrl ? '点击重新选择照片' : (mode === 'edit' ? '点击选择新照片(可选)' : '点击选择人脸照片')}}</view>
         </view>
 
+        <!-- 调试: 确认列表是否把 pid 传过来(正式上线可删) -->
+        <!-- <view class="debug-pid" wx:if="{{mode === 'edit'}}">
+            <text>调试 mode={{mode}} pid={{originalPid || '(空)'}} name={{originalName || '(空)'}}</text>
+        </view> -->
+
         <view class="form-field">
             <text class="field-label">姓名<text class="req">*</text></text>
             <input class="field-input" placeholder="请输入姓名" maxlength="50" value="{{form.name}}" bindinput="onNameInput"/>

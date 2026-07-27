@@ -5,8 +5,10 @@
 //             编辑模式按 name 拉取当前值回填; 保存成功返回列表并刷新
 //   2026-07-27 索引改 pid: originalPid 可靠索引(协议 /person/* 主键); 提交带 pid 走 camera 端点
 //             (api.faceLibraryCamera.update), 不再仅依赖 name(避免重名/改名/非 ASCII 名传输丢字段)
-//   2026-07-27 索引改 pid: originalPid 可靠索引(协议 /person/* 主键); 提交带 pid 走 camera 端点
-//             (api.faceLibraryCamera.update), 不再仅依赖 name(避免重名/改名/非 ASCII 名传输丢字段)
+//   2026-07-27 编辑改 POST+JSON(非 PUT+urlencoded): 绕开 dimina 代理转发 PUT 表单参数丢失,
+//             走代理最可靠的 JSON 原生通路; 后端 F摄像头人脸编辑 用 c.ShouldBind 兼容 JSON/表单
+//   2026-07-27 onLoad 开头重置所有可变数据(表单/照片/预览/原索引): 页面实例被框架复用,
+//             不清除会残留上次输入; 同时移除两处排查 console.log
 const config = require('../../config.js')
 const api = require('../../utils/api.js')
 
@@ -53,14 +55,30 @@ Page({
     submitting: false,
     placeholderAvatar,
   },
+  // 进入页面先清零可变数据(页面实例会被框架复用, 否则残留上次输入/照片/预览)
+  重置数据() {
+    this.setData({
+      originalName: '',
+      originalPid: '',
+      typeIndex: 0,
+      genderIndex: 0,
+      form: {
+        name: '', employeeNo: '', department: '', gender: '', age: '',
+        idCard: '', phone: '', icCardNo: '', validityType: '', validityStartTime: '', validityEndTime: '', other: '',
+      },
+      photoPath: '',
+      previewUrl: '',
+      submitting: false,
+    })
+  },
   onLoad(query) {
+    this.重置数据()
     const mode = query.mode === 'edit' ? 'edit' : 'add'
     this.setData({ mode })
     wx.setNavigationBarTitle({ title: mode === 'edit' ? '编辑人员' : '新增人员' })
     if (mode === 'edit') {
       const name = decodeURIComponent(query.name || '').trim()
       const pid = decodeURIComponent(query.pid || '').trim()
-      console.log('[face-edit] onLoad query:', { name, pid })
       // pid 为可靠唯一索引; 缺失(pid 丢失/旧包)直接报错, 不再用 name 兜底
       if (!pid) {
         wx.showToast({ title: '缺少人员标识(pid)，无法编辑，请返回列表重试', icon: 'none' })
@@ -167,7 +185,6 @@ Page({
     } else {
       formData.name = name
     }
-    console.log('[face-edit] submit formData:', formData)
     // 其余字段: 空字符串不发送(后端沿用现有值)
     ;['employeeNo', 'department', 'gender', 'age', 'idCard', 'phone', 'icCardNo', 'validityType', 'validityStartTime', 'validityEndTime', 'other'].forEach((k) => {
       const v = String(f[k] || '').trim()

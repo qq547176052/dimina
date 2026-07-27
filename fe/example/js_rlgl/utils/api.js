@@ -2,6 +2,7 @@
 // 履历:
 //   2026-07-25 新增: 以 mp-weixin 的 faceRecordsApi/faceLibraryWxApi 为参考, 实现原生 wx.request 封装; 鉴权用 config 本地数据的 token(Bearer); 抓拍图相对路径拼接 BASE 后由 downloadFile 带鉴权下载为临时文件
 //   2026-07-27 token 缓存化: 新增模块级 _tokenCache + setToken(), authHeaders() 优先用缓存(页面打开时由 确保Token 写入一次), 不再每条请求都调 config.读取本地数据() 取 token; 未写入时惰性从 config 读一次兜底(保证首请求带鉴权)
+//   2026-07-27 删除改 POST+JSON(非 DELETE+query): 与编辑一致, 走 dimina 代理原生 JSON 通路, 避开代理对非 POST 方法参数的不确定性; 后端 F摄像头人脸删除 用 c.ShouldBind + Query 兜底
 const config = require('../config.js')
 
 const BASE = config.host // host 已含协议(见 config.js 环境列表: dev=http://, prod=https://)
@@ -84,14 +85,6 @@ const faceRecords = {
   },
 }
 
-// 把表单对象编码为 application/x-www-form-urlencoded 串（编辑无换照时 PUT 用）
-function buildFormString(obj) {
-  return Object.keys(obj || {})
-    .filter((k) => obj[k] !== undefined && obj[k] !== null && obj[k] !== '')
-    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(obj[k])}`)
-    .join('&')
-}
-
 const faceLibrary = {
   // 从抓拍记录加入人脸库
   addFromRecord(data) {
@@ -126,7 +119,7 @@ const faceLibrary = {
       })
     })
   },
-  // 编辑: 带新照片走 wx.uploadFile(PUT); 不换照走 form-urlencoded PUT(后端 PostForm 解析)
+  // 编辑: 带新照片走 wx.uploadFile(POST); 不换照走 JSON POST(后端 ShouldBind 兼容 JSON/表单)
   update(formData, filePath) {
     return new Promise((resolve, reject) => {
       const header = authHeaders()
@@ -138,20 +131,20 @@ const faceLibrary = {
       }
       const onFail = (err) => reject(new Error((err && err.errMsg) || '网络请求失败'))
       if (filePath) {
-        wx.uploadFile({ url: `${BASE}/dd/face-library`, filePath, name: 'photo', formData: formData || {}, header, method: 'PUT', success: onResp, fail: onFail })
+        wx.uploadFile({ url: `${BASE}/dd/face-library`, filePath, name: 'photo', formData: formData || {}, header, method: 'POST', success: onResp, fail: onFail })
       } else {
         wx.request({
           url: `${BASE}/dd/face-library`,
-          method: 'PUT',
-          header: Object.assign({}, header, { 'content-type': 'application/x-www-form-urlencoded' }),
-          data: buildFormString(formData),
+          method: 'POST',
+          header,
+          data: formData,
           success: onResp,
           fail: onFail,
         })
       }
     })
   },
-  // 删除(DELETE query ?name=)
+  // 删除(DELETE query ?name=; 旧本地 xlsx 链路, name 索引)
   remove(name) {
     return request({ url: '/dd/face-library', method: 'DELETE', params: { name } })
   },
@@ -177,8 +170,9 @@ const faceLibraryCamera = {
     if (!n) return ''
     return `${BASE}/dd/face-library/camera/image/${encodeURIComponent(n)}`
   },
-  // 编辑(直读摄像头): PUT /dd/face-library/camera; 带新照片走 wx.uploadFile, 否则 form-urlencoded
+  // 编辑(直读摄像头): POST /dd/face-library/camera; 带新照片走 wx.uploadFile, 否则 JSON POST
   //   formData 必含 pid(原人员唯一标识, 可靠索引) 或 name(兜底); 改名带 newName
+  //   用 POST+JSON 以走 dimina 代理最可靠的原生 JSON 通路(后端 ShouldBind 兼容 JSON/表单)
   update(formData, filePath) {
     return new Promise((resolve, reject) => {
       const header = authHeaders()
@@ -190,25 +184,27 @@ const faceLibraryCamera = {
       }
       const onFail = (err) => reject(new Error((err && err.errMsg) || '网络请求失败'))
       if (filePath) {
-        wx.uploadFile({ url: `${BASE}/dd/face-library/camera`, filePath, name: 'photo', formData: formData || {}, header, method: 'PUT', success: onResp, fail: onFail })
+        wx.uploadFile({ url: `${BASE}/dd/face-library/camera`, filePath, name: 'photo', formData: formData || {}, header, method: 'POST', success: onResp, fail: onFail })
       } else {
         wx.request({
           url: `${BASE}/dd/face-library/camera`,
-          method: 'PUT',
-          header: Object.assign({}, header, { 'content-type': 'application/x-www-form-urlencoded' }),
-          data: buildFormString(formData),
+          method: 'POST',
+          header,
+          data: formData,
           success: onResp,
           fail: onFail,
         })
       }
     })
   },
-  // 删除(直读摄像头): DELETE /dd/face-library/camera?pid={人员唯一标识} 或 ?name={兜底}
+  // 删除(直读摄像头): POST /dd/face-library/camera/delete {pid, name}; 走 dimina 代理原生 JSON 通路
+  //   pid 为可靠唯一索引(优先); 仅传 name 时后端按姓名兜底定位 pid
+  //   用独立子路径(非 /camera 同 path)以免与编辑 POST 冲突(Gin 不允许同 path 双 POST)
   remove(pid, name) {
-    const params = {}
-    if (pid) params.pid = pid
-    else if (name) params.name = name
-    return request({ url: '/dd/face-library/camera', method: 'DELETE', params })
+    const data = {}
+    if (pid) data.pid = pid
+    else if (name) data.name = name
+    return request({ url: '/dd/face-library/camera/delete', method: 'POST', data })
   },
 }
 
