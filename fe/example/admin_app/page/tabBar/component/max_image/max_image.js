@@ -1,4 +1,4 @@
-// page/max_image/max_image.js
+// page/tabBar/component/max_image/max_image.js
 // 简介: 推送落地页. 通知被点击后跳转至此, 接收 query.payload(原始推送 JSON),
 //       按推送字段结构化展示: 标题/内容/全景图/人脸图.
 // 履历:

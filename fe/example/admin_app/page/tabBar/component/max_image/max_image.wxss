@@ -1,4 +1,4 @@
-/* page/max_image/max_image.wxss */
+/* page/tabBar/component/max_image/max_image.wxss */
 /* 简介: 推送落地页样式, 按字段结构化卡片展示 标题/内容/全景图/人脸图 */
 /* 履历: 2026-07-21 创建 */
 /* 履历: 2026-07-21 按推送字段重构样式, 移除状态条/返回按钮/原始数据/通用参数样式 */

@@ -2,7 +2,7 @@
   "pages": [
     "page/login/login",
     "page/index/index",
-    "page/max_image/max_image"
+    "page/tabBar/component/max_image/max_image"
   ],
   "window": {
     "navigationBarTextStyle": "black",
@@ -29,7 +29,7 @@
         "text": "首页"
       },
       {
-        "pagePath": "page/max_image/max_image",
+        "pagePath": "page/tabBar/component/max_image/max_image",
         "text": "大图"
       }
     ]
