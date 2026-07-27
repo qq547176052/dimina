@@ -533,7 +533,7 @@ class Runtime {
 			instance.pageUnload()
 		})
 
-		router.pop()
+		router.remove(bridgeId)
 
 		delete this.instances[bridgeId]
 		this.pageStates.delete(bridgeId)
