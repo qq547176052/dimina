@@ -3,11 +3,16 @@
     <!-- 顶部栏: 标题 + 同步入口 -->
     <view class="topbar">
         <view class="topbar-left">
-            <text class="topbar-title">人脸库</text>
+            <!-- <text class="topbar-title">人脸库</text> -->
             <text wx:if="{{cameraAlias}}" class="topbar-subtitle">{{cameraAlias}}</text>
         </view>
-        <view class="sync-btn" bindtap="openSync">
-            <text class="sync-btn-text">同步</text>
+        <view class="topbar-actions">
+            <view class="add-btn" bindtap="onAdd">
+                <text class="add-btn-text">添加</text>
+            </view>
+            <view class="sync-btn" bindtap="openSync">
+                <text class="sync-btn-text">同步</text>
+            </view>
         </view>
     </view>
 
@@ -21,21 +26,28 @@
         <view class="search-go" bindtap="applyFilter">搜索</view>
     </view>
 
-    <scroll-view scroll-y class="records-scroll" lower-threshold="120" refresher-enabled refresher-triggered="{{refreshing}}" bindrefresherrefresh="onRefresh" bindscrolltolower="onLoadMore">
+    <scroll-view scroll-y="{{!swipeLock}}" class="records-scroll" lower-threshold="120" refresher-enabled refresher-triggered="{{refreshing}}" bindrefresherrefresh="onRefresh" bindscrolltolower="onLoadMore" bindscroll="onListScroll">
 
         <view wx:if="{{loading && !list.length}}" class="status-tip">加载中...</view>
         <view wx:elif="{{loadError && !list.length}}" class="status-tip status-error" bindtap="reloadList">{{loadError}}（点击重试）</view>
         <view wx:elif="{{!loading && !list.length}}" class="status-tip">暂无人员</view>
 
-        <view class="record-list">
-            <view wx:for="{{list}}" wx:key="name" class="record-card" data-name="{{item.name}}" bindtap="onRowTap">
-                <image class="card-avatar" src="{{item.faceDisplayUrl || placeholderAvatar}}" mode="aspectFill"/>
-                <view class="card-body">
-                    <view class="card-name">{{item.name || '-'}}</view>
-                    <view class="card-row"><text class="card-label">工号</text><text class="card-value">{{item.employeeNo || '-'}}</text></view>
-                    <view class="card-row"><text class="card-label">部门</text><text class="card-value">{{item.department || '-'}}</text></view>
+        <view class="record-list" bindtap="onListTap">
+            <view class="swipe-item" wx:for="{{list}}" wx:key="pid" data-name="{{item.name}}" data-pid="{{item.pid}}"
+                  bindtouchstart="onSwipeTouchStart" bindtouchmove="onSwipeTouchMove"
+                  bindtouchend="onSwipeTouchEnd" bindtouchcancel="onSwipeTouchEnd" bindtap="onSwipeTap">
+                <view class="swipe-actions {{item.translateX < 0 ? 'open' : ''}}">
+                    <view class="swipe-btn del" data-name="{{item.name}}" data-pid="{{item.pid}}" catchtap="确认删除">删除</view>
                 </view>
-                <view class="card-tag" style="background:{{item.faceLibraryColor}}">{{item.faceLibraryLabel}}</view>
+                <view class="swipe-content {{swipeLock ? 'no-anim' : ''}}" style="transform: translateX({{item.translateX}}px);">
+                    <image class="card-avatar" src="{{item.faceDisplayUrl || placeholderAvatar}}" mode="aspectFill"/>
+                    <view class="card-body">
+                        <view class="card-name">{{item.name || '-'}}</view>
+                        <view class="card-row"><text class="card-label">工号</text><text class="card-value">{{item.employeeNo || '-'}}</text></view>
+                        <view class="card-row"><text class="card-label">部门</text><text class="card-value">{{item.department || '-'}}</text></view>
+                    </view>
+                    <view class="card-tag" style="background:{{item.faceLibraryColor}}">{{item.faceLibraryLabel}}</view>
+                </view>
             </view>
         </view>
 
@@ -43,9 +55,6 @@
         <view wx:elif="{{list.length && hasMore}}" class="status-tip status-footer">上拉加载更多</view>
         <view wx:elif="{{list.length}}" class="status-tip status-footer">共 {{total}} 条</view>
     </scroll-view>
-
-    <!-- FAB 新增 -->
-    <view class="fab" bindtap="onAdd">+</view>
 
     <!-- 同步弹窗 -->
     <view wx:if="{{syncOpen}}" class="modal-mask" catchtap="closeSync" catchtouchmove="stopPropagation">

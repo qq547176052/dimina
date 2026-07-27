@@ -36,6 +36,23 @@
   color: #999;
   font-weight: 400;
 }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+.add-btn {
+  display: flex;
+  align-items: center;
+  padding: 8rpx 26rpx;
+  background: #fff;
+  border: 1rpx solid #07c160;
+  border-radius: 28rpx;
+}
+.add-btn-text {
+  font-size: 13px;
+  color: #07c160;
+}
 .sync-btn {
   display: flex;
   align-items: center;
@@ -46,6 +63,59 @@
 .sync-btn-text {
   font-size: 13px;
   color: #fff;
+}
+
+/* ---- 列表项: 左滑删除(参考 admin_app/page/index) ---- */
+.swipe-item {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14rpx;
+  margin-bottom: 16rpx;
+}
+.swipe-actions {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 160rpx;
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+}
+.swipe-actions.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.swipe-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  background: #fff;
+  border-radius: 14rpx;
+  display: flex;
+  align-items: center;
+  padding: 20rpx 24rpx;
+  box-sizing: border-box;
+  transform: translateX(0);
+  transition: transform 0.2s ease;
+  will-change: transform;
+  box-shadow: 0 2rpx 12rpx rgba(0,0,0,.05);
+}
+.swipe-content.no-anim {
+  transition: none;
+}
+.swipe-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 30rpx;
+}
+.swipe-btn.del {
+  background: #e64340;
 }
 
 /* ---- 搜索栏 ---- */
@@ -105,15 +175,6 @@
 .record-list {
   padding: 10px 12px 20px;
 }
-.record-card {
-  display: flex;
-  align-items: center;
-  background: #fff;
-  border-radius: 14rpx;
-  padding: 20rpx 24rpx;
-  margin-bottom: 16rpx;
-  box-shadow: 0 2rpx 12rpx rgba(0,0,0,.05);
-}
 .card-avatar {
   width: 80px;
   height: 80px;
@@ -162,23 +223,6 @@
   font-size: 12px;
   color: #fff;
   align-self: center;
-}
-
-/* ---- FAB ---- */
-.fab {
-  position: fixed;
-  right: 40rpx;
-  bottom: calc(40rpx + env(safe-area-inset-bottom));
-  width: 96rpx;
-  height: 96rpx;
-  line-height: 92rpx;
-  text-align: center;
-  font-size: 56rpx;
-  color: #fff;
-  background: linear-gradient(135deg, #07c160, #06ad56);
-  border-radius: 50%;
-  box-shadow: 0 8rpx 24rpx rgba(7,193,96,.35);
-  z-index: 100;
 }
 
 /* ---- 弹窗(同步) ---- */

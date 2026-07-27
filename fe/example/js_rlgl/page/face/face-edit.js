@@ -5,8 +5,10 @@
 //             编辑模式按 name 拉取当前值回填; 保存成功返回列表并刷新
 //   2026-07-27 索引改 pid: originalPid 可靠索引(协议 /person/* 主键); 提交带 pid 走 camera 端点
 //             (api.faceLibraryCamera.update), 不再仅依赖 name(避免重名/改名/非 ASCII 名传输丢字段)
-//   2026-07-27 修复"pid 或 name 必填": 编辑回填时按 pid/name 精确定位行并同步写回 originalName/originalPid,
-//             提交前双空则直接拦截提示, 避免 query 缺字段导致后端校验失败
+//   2026-07-27 修复"pid 或 name 必填": 编辑回填时按 pid 精确定位行并写回 originalPid,
+//             提交前无 pid 直接拦截提示, 避免 query 缺字段导致后端校验失败
+//   2026-07-27 pid-only 重构: 彻底弃用 name 作索引; onLoad 缺 pid 直接报错; 拉取并回填仅按 pid 查行;
+//             提交仅发送 pid(改名带 newName), 不回退 name; 列表已用 data-pid 直传, 杜绝重名串号丢 pid
 const config = require('../../config.js')
 const api = require('../../utils/api.js')
 
@@ -58,32 +60,30 @@ Page({
     this.setData({ mode })
     wx.setNavigationBarTitle({ title: mode === 'edit' ? '编辑人员' : '新增人员' })
     if (mode === 'edit') {
-      const name = decodeURIComponent(query.name || '')
-      const pid = decodeURIComponent(query.pid || '')
+      const name = decodeURIComponent(query.name || '').trim()
+      const pid = decodeURIComponent(query.pid || '').trim()
+      console.log('[face-edit] onLoad query:', { name, pid })
+      // pid 为可靠唯一索引; 缺失(pid 丢失/旧包)直接报错, 不再用 name 兜底
+      if (!pid) {
+        wx.showToast({ title: '缺少人员标识(pid)，无法编辑，请返回列表重试', icon: 'none' })
+        return
+      }
       this.setData({ originalName: name, originalPid: pid })
-      this.拉取并回填(name, pid)
+      this.拉取并回填(pid)
     }
   },
-  // 编辑模式: 按姓名(或 pid)取当前值回填
-  // 注: 摄像头固件未必返回 pid, 故 name 与 pid 互补; 回填后一定把 originalName/originalPid 写回,
-  //     防止 query 缺字段导致提交时"pid 或 name(原姓名) 必填"
-  拉取并回填(name, pid) {
-    if (!name && !pid) return
-    api.faceLibraryCamera.list({ name: name || '', pageSize: 100 })
+  // 编辑模式: 仅按 pid 取当前值回填(协议 /person/* 主键, 可靠; 不使用 name 索引避免重名串号)
+  拉取并回填(pid) {
+    if (!pid) return
+    api.faceLibraryCamera.list({ pageSize: 100 })
       .then((payload) => {
         const rows = (payload && payload.list) || []
-        let row = null
-        if (pid) {
-          row = rows.find((r) => r.pid === pid) || null
-        }
-        if (!row && name) {
-          row = rows.find((r) => r.name === name) || null
-        }
+        const row = rows.find((r) => r.pid === pid) || null
         if (!row) return
-        // 把查询到的 name/pid 写回原始索引(优先行记录, 兜底 query 传入值)
+        // 把查询到的 name 写回(仅用于改名检测; 索引只用 pid)
         this.setData({
           originalName: row.name || this.data.originalName || '',
-          originalPid: row.pid || this.data.originalPid || '',
+          originalPid: pid,
         })
         const typeIdx = TYPE_OPTIONS.findIndex((o) => o.value === row.faceLibrary)
         const genderIdx = GENDER_OPTIONS.findIndex((o) => o.value === (row.gender || ''))
@@ -154,19 +154,22 @@ Page({
       return
     }
 
-    if (this.data.mode === 'edit' && !this.data.originalPid && !this.data.originalName) {
-      wx.showToast({ title: '页面参数异常，请返回列表重新进入编辑', icon: 'none' })
+    const origPid = String(this.data.originalPid || '').trim()
+    const origName = String(this.data.originalName || '').trim()
+    // pid 为唯一索引; 缺失直接报错, 不回退 name(避免重名串号/丢失标识)
+    if (this.data.mode === 'edit' && !origPid) {
+      wx.showToast({ title: '缺少人员标识(pid)，无法保存', icon: 'none' })
       return
     }
     const formData = { faceLibrary: type.value }
     if (this.data.mode === 'edit') {
-      // 编辑: pid(可靠索引) 优先定位, name 作兜底; 改名时另带 newName
-      if (this.data.originalPid) formData.pid = this.data.originalPid
-      if (this.data.originalName) formData.name = this.data.originalName
-      if (name !== this.data.originalName) formData.newName = name
+      // 编辑: 仅用 pid 定位原记录; 改名时另带 newName(不再发送原 name 作索引)
+      formData.pid = origPid
+      if (name !== origName) formData.newName = name
     } else {
       formData.name = name
     }
+    console.log('[face-edit] submit formData:', formData)
     // 其余字段: 空字符串不发送(后端沿用现有值)
     ;['employeeNo', 'department', 'gender', 'age', 'idCard', 'phone', 'icCardNo', 'validityType', 'validityStartTime', 'validityEndTime', 'other'].forEach((k) => {
       const v = String(f[k] || '').trim()

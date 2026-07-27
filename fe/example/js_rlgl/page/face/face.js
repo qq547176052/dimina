@@ -11,10 +11,17 @@
 //             不再以 name 为主键(避免重名/改名/非 ASCII 名传输丢字段)
 //   2026-07-27 标题副行: 列表响应 data.cameraAlias 透传(第一台摄像头别名), 标题下方展示"当前操作摄像头"
 //             后端 F摄像头人脸列表 在 data 返回 cameraIP/cameraAlias, api.unwrapList 透传 meta, 本页写入 cameraAlias
+//   2026-07-27 交互改左滑删除: 列表项改为可左滑展开"删除"按钮(参考 admin_app/page/index 手势, 适配人脸库 pid 索引),
+//             点击列表项直接进入编辑(去掉 action sheet); 顶栏"同步"前加"添加"按钮, 移除旧 FAB 悬浮加号
+//   2026-07-27 pid-only: 列表项 wx:key 改 pid, swipe-item/删除按钮均挂 data-pid; onTapItem/确认删除 直接读
+//             dataset.pid(不再用 name 反查), 重名也不会串号丢 pid; 没有 pid 直接提示无法编辑/删除
 const config = require('../../config.js')
 const api = require('../../utils/api.js')
 
 const PAGE_SIZE = 20
+// 左滑手势阈值(px): 闭合态左滑超过该值展开, 展开态从该位右拖超过该值收起
+const SWIPE_OPEN_PX = 15
+const SWIPE_CLOSE_PX = 15
 // 人员类型筛选词典(含"全部"); 人脸库仅 4 类, 无陌生人
 const FACE_LIBRARY_FILTER_OPTIONS = [
   { value: '', label: '全部' },
@@ -112,6 +119,7 @@ function normalizeRecord(row) {
     validityEndTime: row.validityEndTime || '',
     employeeNo: row.employeeNo || '',
     faceDisplayUrl: '', // 经 wx.downloadFile 带鉴权取临时文件后填入
+    translateX: 0,      // 左滑位移(px), 由触摸手势写入; <0 表示已展开删除按钮
   }
 }
 
@@ -139,11 +147,17 @@ Page({
     syncing: false,
     syncMessage: '',
     syncCode: -1,
-    // 行操作目标(编辑/删除)
-    actionTarget: null,
+    // 左滑手势
+    actionWidth: 0,   // 删除按钮区宽度(px), onShow 按屏幕宽度计算
+    swipeLock: false, // 横向滑动进行中锁定滚动, 避免抢手势
   },
   onShow() {
     this.确保Token()
+    try {
+      const sys = (typeof wx.getSystemInfoSync === 'function') ? wx.getSystemInfoSync() : {}
+      // 单删除按钮宽 160rpx → px
+      this.setData({ actionWidth: Math.round((sys.windowWidth || 375) / 750 * 160) })
+    } catch (e) { /* 计算失败用默认 0, 手势不展开 */ }
   },
   // 读取本地数据->校验账号密码与 token 有效期->必要时重新登录->加载列表
   确保Token() {
@@ -277,30 +291,103 @@ Page({
     this.setData({ filterCount: count, filterOpen: false })
     this.加载列表(true)
   },
-  // ===== 行操作(编辑/删除) =====
-  onRowTap(e) {
-    const name = e.currentTarget.dataset.name
-    const item = this.data.list.find((r) => r.name === name)
-    if (!item) return
-    this.setData({ actionTarget: item })
-    wx.showActionSheet({
-      itemList: ['编辑', '删除'],
-      success: (res) => {
-        if (res.tapIndex === 0) this.跳转编辑(name, item.pid)
-        else if (res.tapIndex === 1) this.确认删除(name)
-      },
-    })
+  // ===== 列表项左滑: 删除(参考 admin_app/page/index 手势实现, 适配人脸库列表) =====
+  // 直接由 touch 事件(clientX/Y 差)计算位移写回 item.translateX, 不依赖 movable-view
+  onSwipeTouchStart(e) {
+    const t = e.touches[0]
+    this._sx = t ? t.clientX : 0
+    this._sy = t ? t.clientY : 0
+    this._startTranslate = this._lookupTranslateX(e.currentTarget.dataset.name)
+    this._swipeWasOpen = this._startTranslate < 0
+    this._dir = null        // 'h' 横向 | 'v' 纵向 | null 未定
+    this._moved = false
+    this._curX = this._startTranslate
   },
-  // FAB 新增
+  onSwipeTouchMove(e) {
+    const t = e.touches[0]
+    if (!t) return
+    const dx = t.clientX - this._sx
+    const dy = t.clientY - this._sy
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) this._moved = true
+    if (this._dir === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      this._dir = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v'
+      if (this._dir === 'h' && !this.data.swipeLock) this.setData({ swipeLock: true })
+    }
+    if (this._dir !== 'h') return // 纵向滚动或尚未确定: 交回原生滚动
+    const name = e.currentTarget.dataset.name
+    this._curX = Math.max(-this.data.actionWidth, Math.min(0, this._startTranslate + dx))
+    this._setItemTranslateX(name, this._curX)
+  },
+  onSwipeTouchEnd(e) {
+    const name = e.currentTarget.dataset.name
+    if (this.data.swipeLock) this.setData({ swipeLock: false })
+    if (this._dir === 'h') {
+      const { actionWidth } = this.data
+      const x = typeof this._curX === 'number' ? this._curX : 0
+      const target = this._startTranslate < 0
+        ? (x > this._startTranslate + SWIPE_CLOSE_PX ? 0 : -actionWidth)
+        : (x < -SWIPE_OPEN_PX ? -actionWidth : 0)
+      if (target < 0) this._closeOthers(name)
+      this._setItemTranslateX(name, target)
+      this._dir = null
+      return
+    }
+    this._dir = null
+  },
+  onSwipeTap(e) {
+    if (this._moved) return // 滑动/滚动后补发的 tap 不触发
+    const hasOpen = this.data.list.some((it) => it.translateX < 0)
+    if (hasOpen) { this._closeAllSwipes(); return }
+    this.onTapItem(e)
+  },
+  // 点击列表项直接进编辑(pid 唯一索引, 不再用 name 反查避免重名串号)
+  onTapItem(e) {
+    const ds = e.currentTarget.dataset
+    const name = ds.name
+    const pid = ds.pid
+    if (!pid) {
+      wx.showToast({ title: '该人员缺少标识(pid)，无法编辑', icon: 'none' })
+      return
+    }
+    this.跳转编辑(name, pid)
+  },
+  _lookupTranslateX(name) {
+    const it = this.data.list.find((x) => x.name === name)
+    return it ? it.translateX : 0
+  },
+  _setItemTranslateX(name, x) {
+    const i = this.data.list.findIndex((it) => it.name === name)
+    if (i >= 0) this.setData({ ['list[' + i + '].translateX']: x })
+  },
+  _closeAllSwipes() {
+    if (!this.data.list.some((it) => it.translateX < 0)) return
+    this.setData({ list: this.data.list.map((it) => ({ ...it, translateX: 0 })) })
+  },
+  _closeOthers(exceptName) {
+    this.setData({ list: this.data.list.map((it) => (it.name !== exceptName && it.translateX < 0 ? { ...it, translateX: 0 } : it)) })
+  },
+  // 点击列表空白区域: 有展开则收起
+  onListTap() {
+    const hasOpen = this.data.list.some((it) => it.translateX < 0)
+    if (hasOpen) this._closeAllSwipes()
+  },
+  // 列表滚动时自动收起展开项
+  onListScroll() {
+    const hasOpen = this.data.list.some((it) => it.translateX < 0)
+    if (hasOpen) this._closeAllSwipes()
+  },
+  // FAB/顶栏 新增
   onAdd() {
     wx.navigateTo({ url: '/page/face/face-edit?mode=add' })
   },
   跳转编辑(name, pid) {
     wx.navigateTo({ url: '/page/face/face-edit?mode=edit&name=' + encodeURIComponent(name) + '&pid=' + encodeURIComponent(pid || '') })
   },
-  确认删除(name) {
-    const item = this.data.list.find((r) => r.name === name)
-    const pid = item ? item.pid : ''
+  确认删除(e) {
+    const ds = (typeof e === 'string') ? {} : e.currentTarget.dataset
+    const name = (typeof e === 'string') ? e : ds.name
+    const pid = (typeof e === 'string') ? '' : ds.pid
+    this._closeAllSwipes()
     wx.showModal({
       title: '删除确认',
       content: `确定从人脸库删除「${name}」吗？\n将同时删除所有摄像头中的该人员。`,
@@ -309,7 +396,7 @@ Page({
       success: (res) => {
         if (!res.confirm) return
         wx.showLoading({ title: '删除中...', mask: true })
-        api.faceLibraryCamera.remove(pid, name)
+        api.faceLibraryCamera.remove(pid, '')
           .then(() => {
             wx.showToast({ title: '已删除', icon: 'success' })
             this.加载列表(true)
