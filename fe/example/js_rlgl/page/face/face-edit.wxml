@@ -1,0 +1,74 @@
+<!-- 人脸库新增/编辑表单页 -->
+<view class="page">
+    <scroll-view scroll-y class="form-scroll">
+        <!-- 照片 -->
+        <view class="photo-section">
+            <image class="photo-preview" src="{{previewUrl || placeholderAvatar}}" mode="aspectFill" bindtap="选择照片"/>
+            <view class="photo-tip">{{previewUrl ? '点击重新选择照片' : (mode === 'edit' ? '点击选择新照片(可选)' : '点击选择人脸照片')}}</view>
+        </view>
+
+        <view class="form-field">
+            <text class="field-label">姓名<text class="req">*</text></text>
+            <input class="field-input" placeholder="请输入姓名" maxlength="50" value="{{form.name}}" bindinput="onNameInput"/>
+        </view>
+        <view class="form-field">
+            <text class="field-label">人员类型<text class="req">*</text></text>
+            <picker mode="selector" range="{{typeOptions}}" range-key="label" value="{{typeIndex}}" bindchange="onTypePick">
+                <view class="field-picker">{{typeOptions[typeIndex].label}}</view>
+            </picker>
+        </view>
+        <view class="form-field">
+            <text class="field-label">性别</text>
+            <picker mode="selector" range="{{genderOptions}}" range-key="label" value="{{genderIndex}}" bindchange="onGenderPick">
+                <view class="field-picker">{{genderOptions[genderIndex].label}}</view>
+            </picker>
+        </view>
+        <view class="form-field">
+            <text class="field-label">工号</text>
+            <input class="field-input" placeholder="选填" value="{{form.employeeNo}}" data-field="employeeNo" bindinput="onInput"/>
+        </view>
+        <view class="form-field">
+            <text class="field-label">部门</text>
+            <input class="field-input" placeholder="选填" value="{{form.department}}" data-field="department" bindinput="onInput"/>
+        </view>
+        <view class="form-field">
+            <text class="field-label">年龄</text>
+            <input class="field-input" placeholder="选填" type="number" value="{{form.age}}" data-field="age" bindinput="onInput"/>
+        </view>
+        <view class="form-field">
+            <text class="field-label">身份证号</text>
+            <input class="field-input" placeholder="选填" value="{{form.idCard}}" data-field="idCard" bindinput="onInput"/>
+        </view>
+        <view class="form-field">
+            <text class="field-label">电话</text>
+            <input class="field-input" placeholder="选填" type="number" value="{{form.phone}}" data-field="phone" bindinput="onInput"/>
+        </view>
+        <view class="form-field">
+            <text class="field-label">IC卡</text>
+            <input class="field-input" placeholder="选填" value="{{form.icCardNo}}" data-field="icCardNo" bindinput="onInput"/>
+        </view>
+        <view class="form-field">
+            <text class="field-label">有效期类型</text>
+            <input class="field-input" placeholder="选填" value="{{form.validityType}}" data-field="validityType" bindinput="onInput"/>
+        </view>
+        <view class="form-field">
+            <text class="field-label">有效期开始</text>
+            <input class="field-input" placeholder="选填 yyyy-MM-dd" value="{{form.validityStartTime}}" data-field="validityStartTime" bindinput="onInput"/>
+        </view>
+        <view class="form-field">
+            <text class="field-label">有效期结束</text>
+            <input class="field-input" placeholder="选填 yyyy-MM-dd" value="{{form.validityEndTime}}" data-field="validityEndTime" bindinput="onInput"/>
+        </view>
+        <view class="form-field">
+            <text class="field-label">其他</text>
+            <input class="field-input" placeholder="选填" value="{{form.other}}" data-field="other" bindinput="onInput"/>
+        </view>
+        <view class="form-spacer"></view>
+    </scroll-view>
+
+    <!-- 底部操作栏 -->
+    <view class="action-bar">
+        <button class="action-cancel" size="mini" disabled="{{submitting}}" bindtap="取消">取消</button>
+        <button class="action-submit" size="mini" disabled="{{submitting}}" bindtap="提交">{{submitting ? '提交中...' : (mode === 'edit' ? '保存' : '添加')}}</button>
+    </view>
+</view>

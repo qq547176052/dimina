@@ -4,7 +4,7 @@
 //   2026-07-27 token 缓存化: 新增模块级 _tokenCache + setToken(), authHeaders() 优先用缓存(页面打开时由 确保Token 写入一次), 不再每条请求都调 config.读取本地数据() 取 token; 未写入时惰性从 config 读一次兜底(保证首请求带鉴权)
 const config = require('../config.js')
 
-const BASE = `https://${config.host}`
+const BASE = config.host // host 已含协议(见 config.js 环境列表: dev=http://, prod=https://)
 
 // token 缓存: 小程序打开时由页面读取一次本地数据写入(见 page/index/index.js 确保Token), 后续所有请求复用,
 // 不再每条请求都调 config.读取本地数据() 取 token(消除"每读一次头像/每发一条请求就读一次本地数据"的放大)
@@ -67,7 +67,7 @@ function unwrapList(result) {
   }
   const data = (result.data && typeof result.data === 'object') ? result.data : result
   const rows = data.list || data.records || data.items || []
-  return { ok: true, message: '', list: Array.isArray(rows) ? rows : [], total: Number(data.total != null ? data.total : 0) || 0 }
+  return { ok: true, message: '', list: Array.isArray(rows) ? rows : [], total: Number(data.total != null ? data.total : 0) || 0, meta: data }
 }
 
 const faceRecords = {
@@ -84,14 +84,135 @@ const faceRecords = {
   },
 }
 
+// 把表单对象编码为 application/x-www-form-urlencoded 串（编辑无换照时 PUT 用）
+function buildFormString(obj) {
+  return Object.keys(obj || {})
+    .filter((k) => obj[k] !== undefined && obj[k] !== null && obj[k] !== '')
+    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(obj[k])}`)
+    .join('&')
+}
+
 const faceLibrary = {
   // 从抓拍记录加入人脸库
   addFromRecord(data) {
     return request({ url: '/dd/face-library/wx-from-record', method: 'POST', data })
   },
+  // 人脸库列表(GET, 筛选+分页)
+  list(params = {}) {
+    return request({ url: '/dd/face-library', method: 'GET', params }).then(unwrapList)
+  },
+  // 人脸照展示地址(拼绝对地址; <image> 网络图不可带鉴权头, 故由 wx.downloadFile 带鉴权取临时文件)
+  imageUrl(name) {
+    const n = String(name || '').trim()
+    if (!n) return ''
+    return `${BASE}/dd/face-library/image/${encodeURIComponent(n)}`
+  },
+  // 添加(上传文件 + 表单字段, multipart; 文件字段名 photo)
+  add(formData, filePath) {
+    return new Promise((resolve, reject) => {
+      wx.uploadFile({
+        url: `${BASE}/dd/face-library`,
+        filePath,
+        name: 'photo',
+        formData: formData || {},
+        header: authHeaders(),
+        success: (res) => {
+          let body = res.data
+          try { body = JSON.parse(res.data) } catch (e) { body = {} }
+          if (res.statusCode >= 200 && res.statusCode < 300 && body.success !== false && (body.code == null || Number(body.code) === 200)) resolve(body)
+          else reject(new Error(body.message || body.msg || `添加失败(${res.statusCode})`))
+        },
+        fail: (err) => reject(new Error((err && err.errMsg) || '网络请求失败')),
+      })
+    })
+  },
+  // 编辑: 带新照片走 wx.uploadFile(PUT); 不换照走 form-urlencoded PUT(后端 PostForm 解析)
+  update(formData, filePath) {
+    return new Promise((resolve, reject) => {
+      const header = authHeaders()
+      const onResp = (res) => {
+        let body = res.data
+        if (typeof body === 'string') { try { body = JSON.parse(res.data) } catch (e) { body = {} } }
+        if (res.statusCode >= 200 && res.statusCode < 300 && body.success !== false && (body.code == null || Number(body.code) === 200)) resolve(body)
+        else reject(new Error(body.message || body.msg || `编辑失败(${res.statusCode})`))
+      }
+      const onFail = (err) => reject(new Error((err && err.errMsg) || '网络请求失败'))
+      if (filePath) {
+        wx.uploadFile({ url: `${BASE}/dd/face-library`, filePath, name: 'photo', formData: formData || {}, header, method: 'PUT', success: onResp, fail: onFail })
+      } else {
+        wx.request({
+          url: `${BASE}/dd/face-library`,
+          method: 'PUT',
+          header: Object.assign({}, header, { 'content-type': 'application/x-www-form-urlencoded' }),
+          data: buildFormString(formData),
+          success: onResp,
+          fail: onFail,
+        })
+      }
+    })
+  },
+  // 删除(DELETE query ?name=)
+  remove(name) {
+    return request({ url: '/dd/face-library', method: 'DELETE', params: { name } })
+  },
+  // 发起全量同步(后台执行)
+  syncStart() {
+    return request({ url: '/dd/face-library/sync', method: 'POST', data: {} })
+  },
+  // 查询同步状态: data.code 0成功/1同步中/2异常
+  syncStatus() {
+    return request({ url: '/dd/face-library/sync', method: 'GET' })
+  },
 }
 
-module.exports = { BASE, authHeaders, setToken, faceRecords, faceLibrary }
+// 人脸库「直读摄像头」新接口(与本地 xlsx 链路解耦, 数据实时从摄像头取)
+const faceLibraryCamera = {
+  // 人脸库列表(GET, 直读摄像头; 筛选+分页与旧 list 一致)
+  list(params = {}) {
+    return request({ url: '/dd/face-library/camera', method: 'GET', params }).then(unwrapList)
+  },
+  // 人脸照展示地址(直读摄像头代理; <image> 网络图不可带鉴权头, 故由 wx.downloadFile 带鉴权取临时文件)
+  imageUrl(name) {
+    const n = String(name || '').trim()
+    if (!n) return ''
+    return `${BASE}/dd/face-library/camera/image/${encodeURIComponent(n)}`
+  },
+  // 编辑(直读摄像头): PUT /dd/face-library/camera; 带新照片走 wx.uploadFile, 否则 form-urlencoded
+  //   formData 必含 pid(原人员唯一标识, 可靠索引) 或 name(兜底); 改名带 newName
+  update(formData, filePath) {
+    return new Promise((resolve, reject) => {
+      const header = authHeaders()
+      const onResp = (res) => {
+        let body = res.data
+        if (typeof body === 'string') { try { body = JSON.parse(res.data) } catch (e) { body = {} } }
+        if (res.statusCode >= 200 && res.statusCode < 300 && body.success !== false && (body.code == null || Number(body.code) === 200)) resolve(body)
+        else reject(new Error(body.message || body.msg || `编辑失败(${res.statusCode})`))
+      }
+      const onFail = (err) => reject(new Error((err && err.errMsg) || '网络请求失败'))
+      if (filePath) {
+        wx.uploadFile({ url: `${BASE}/dd/face-library/camera`, filePath, name: 'photo', formData: formData || {}, header, method: 'PUT', success: onResp, fail: onFail })
+      } else {
+        wx.request({
+          url: `${BASE}/dd/face-library/camera`,
+          method: 'PUT',
+          header: Object.assign({}, header, { 'content-type': 'application/x-www-form-urlencoded' }),
+          data: buildFormString(formData),
+          success: onResp,
+          fail: onFail,
+        })
+      }
+    })
+  },
+  // 删除(直读摄像头): DELETE /dd/face-library/camera?pid={人员唯一标识} 或 ?name={兜底}
+  remove(pid, name) {
+    const params = {}
+    if (pid) params.pid = pid
+    else if (name) params.name = name
+    return request({ url: '/dd/face-library/camera', method: 'DELETE', params })
+  },
+}
+
+module.exports = { BASE, authHeaders, setToken, faceRecords, faceLibrary, faceLibraryCamera }
 
 /*
 

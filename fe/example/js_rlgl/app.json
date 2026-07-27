@@ -2,7 +2,8 @@
   "pages": [
     "page/login/login",
     "page/index/index",
-    "page/face/face"
+    "page/face/face",
+    "page/face/face-edit"
   ],
   "window": {
     "navigationBarTextStyle": "black",

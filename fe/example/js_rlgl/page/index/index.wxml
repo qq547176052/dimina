@@ -6,6 +6,8 @@
     <!-- 顶部栏: 标题 + 筛选入口(显示已选条件数) -->
     <view class="topbar">
         <text class="topbar-title">抓拍记录</text>
+        <!-- 调试用版本号：辨认前端是否更新，上线生产版本删除 -->
+        <text class="topbar-version">v{{version}}</text>
         <view class="filter-btn" bindtap="openFilter">
             <text class="filter-btn-text">筛选</text>
             <text wx:if="{{filterCount > 0}}" class="filter-badge">{{filterCount}}</text>

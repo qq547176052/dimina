@@ -1,10 +1,66 @@
-<page-meta root-font-size="system"></page-meta>
+<!-- 人脸库列表页: 搜索/类型筛选/分页, 行操作(action sheet 编辑/删除), 同步弹窗, FAB 新增; 风格参考 page/index -->
 <view class="page">
-    <view class="page__hd">
-        <view class="page__title">人脸库</view>
-        <view class="page__desc">已录入的人脸信息</view>
+    <!-- 顶部栏: 标题 + 同步入口 -->
+    <view class="topbar">
+        <view class="topbar-left">
+            <text class="topbar-title">人脸库</text>
+            <text wx:if="{{cameraAlias}}" class="topbar-subtitle">{{cameraAlias}}</text>
+        </view>
+        <view class="sync-btn" bindtap="openSync">
+            <text class="sync-btn-text">同步</text>
+        </view>
     </view>
-    <view class="page__bd page__bd_spacing">
-        <view class="empty-tip">暂无数据</view>
+
+    <!-- 搜索栏: 姓名 + 部门 + 类型筛选 -->
+    <view class="searchbar">
+        <input class="search-input" placeholder="搜索姓名" value="{{filters.name}}" data-field="name" bindinput="onFilterInput"/>
+        <input class="search-input" placeholder="部门" value="{{filters.department}}" data-field="department" bindinput="onFilterInput"/>
+        <picker mode="selector" range="{{faceLibraryFilterOptions}}" range-key="label" value="{{filterTypeIndex}}" bindchange="onFilterTypePick">
+            <view class="search-picker">{{faceLibraryFilterOptions[filterTypeIndex].label}}</view>
+        </picker>
+        <view class="search-go" bindtap="applyFilter">搜索</view>
+    </view>
+
+    <scroll-view scroll-y class="records-scroll" lower-threshold="120" refresher-enabled refresher-triggered="{{refreshing}}" bindrefresherrefresh="onRefresh" bindscrolltolower="onLoadMore">
+
+        <view wx:if="{{loading && !list.length}}" class="status-tip">加载中...</view>
+        <view wx:elif="{{loadError && !list.length}}" class="status-tip status-error" bindtap="reloadList">{{loadError}}（点击重试）</view>
+        <view wx:elif="{{!loading && !list.length}}" class="status-tip">暂无人员</view>
+
+        <view class="record-list">
+            <view wx:for="{{list}}" wx:key="name" class="record-card" data-name="{{item.name}}" bindtap="onRowTap">
+                <image class="card-avatar" src="{{item.faceDisplayUrl || placeholderAvatar}}" mode="aspectFill"/>
+                <view class="card-body">
+                    <view class="card-name">{{item.name || '-'}}</view>
+                    <view class="card-row"><text class="card-label">工号</text><text class="card-value">{{item.employeeNo || '-'}}</text></view>
+                    <view class="card-row"><text class="card-label">部门</text><text class="card-value">{{item.department || '-'}}</text></view>
+                </view>
+                <view class="card-tag" style="background:{{item.faceLibraryColor}}">{{item.faceLibraryLabel}}</view>
+            </view>
+        </view>
+
+        <view wx:if="{{loadingMore}}" class="status-tip status-footer">加载中...</view>
+        <view wx:elif="{{list.length && hasMore}}" class="status-tip status-footer">上拉加载更多</view>
+        <view wx:elif="{{list.length}}" class="status-tip status-footer">共 {{total}} 条</view>
+    </scroll-view>
+
+    <!-- FAB 新增 -->
+    <view class="fab" bindtap="onAdd">+</view>
+
+    <!-- 同步弹窗 -->
+    <view wx:if="{{syncOpen}}" class="modal-mask" catchtap="closeSync" catchtouchmove="stopPropagation">
+        <view class="modal-box" catchtap="stopPropagation">
+            <view class="modal-title">人脸库同步</view>
+            <view class="sync-status sync-{{syncCode}}">
+                <text wx:if="{{syncCode === 0}}">✓ {{syncMessage || '同步成功'}}</text>
+                <text wx:elif="{{syncCode === 2}}">✕ {{syncMessage || '同步异常'}}</text>
+                <text wx:else>{{syncMessage || '准备中...'}}</text>
+            </view>
+            <view wx:if="{{syncing}}" class="sync-loading">同步进行中，请稍候...</view>
+            <view class="modal-actions">
+                <button wx:if="{{syncCode !== 1}}" class="modal-btn modal-btn-cancel" size="mini" bindtap="closeSync">关闭</button>
+                <button wx:if="{{!syncing}}" class="modal-btn modal-btn-submit" size="mini" bindtap="开始同步">{{syncCode === 0 || syncCode === 2 ? '重新同步' : '开始同步'}}</button>
+            </view>
+        </view>
     </view>
 </view>

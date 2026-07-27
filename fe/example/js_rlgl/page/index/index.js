@@ -147,6 +147,7 @@ Page({
     faceLibraryFilterOptions: FACE_LIBRARY_FILTER_OPTIONS,
     filterOpen: false,
     filterCount: 0,
+    version: '', // 调试用：顶部栏显示版本号以辨认是否更新，生产版本删除
   },
   onLoad() {
     // 版本号: 优先取宿主注入的 appVersion, 无则回退兜底值
