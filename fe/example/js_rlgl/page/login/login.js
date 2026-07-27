@@ -1,5 +1,5 @@
 // page/login/login.js
-// 简介: 登录页(启动页). onLoad 自检登录态: 已登录直接 reLaunch 首页, 未登录停留输入账号密码.
+// 简介: 登录页(启动页). onLoad 自检登录态: 已登录直接 switchTab 首页(tabBar 页), 未登录停留输入账号密码.
 //       调用后端登录接口(config.api登录链接)校验账号密码, 成功写入 token 与账号名到 storage, 供首页与退出登录使用.
 // 履历:
 //   2026-07-23 新建: 账号密码登录 + 登录态自检跳转(启动页), 用 reLaunch 避免返回键回到登录页
@@ -13,6 +13,7 @@
 //   2026-07-24 onLoad 自检: token 快过期(5分钟内)时用保存的账号密码调用 config.登录 自动刷新, 否则直接进首页
 //   2026-07-25 本地数据统一封装为整对象(config.读取本地数据/保存本地数据), 所有 storage 操作走该对象(单一键'本地数据')
 //   2026-07-25 修正 HOME_PATH: 由越界旧路径(/page/tabBar/component/index/index)改为 js_rlgl 首页 /page/index/index(配合底部 tabBar 抓拍记录)
+//   2026-07-27 登录/刷新跳转由 reLaunch 改为 switchTab: 首页为 tabBar 页, redirectTo 跳 tab 页会被容器拦截失败(can not redirectTo a tabbar page), 故用 switchTab(跳 tab 页官方推荐, 仅销毁非 tab 的 login 并保留 tab 池, 比 reLaunch 轻量); 注: switchTab 仍换桥, 换桥空窗 bug 待框架方案 B(常驻 invoke 处理器)根治
 const config = require('../../config.js') // 后端配置(含 api登录链接/login 函数 与 storage 键常量)
 const HOME_PATH = '/page/index/index'
 
@@ -60,7 +61,7 @@ Page({
         console.log('token解析失败:', 错误)
       }
       if (!快过期) {
-        wx.reLaunch({ url: HOME_PATH }) // 未快过期: 直接进首页
+        wx.switchTab({ url: HOME_PATH }) // 未快过期: 直接进首页
         return
       }
       // 快过期: 用保存的账号密码重新登录刷新 token
@@ -73,7 +74,7 @@ Page({
           .then(() => {
             const app = getApp()
             if (app && app.globalData) app.globalData.hasLogin = true
-            wx.reLaunch({ url: HOME_PATH })
+            wx.switchTab({ url: HOME_PATH })
           })
           .catch((错误) => {
             this.setData({ loading: false })
@@ -82,7 +83,7 @@ Page({
         return
       }
       // 无保存的账号密码, 无法刷新, 直接进入首页
-      wx.reLaunch({ url: HOME_PATH })
+      wx.switchTab({ url: HOME_PATH })
     }
   },
 
@@ -126,7 +127,7 @@ Page({
         }
         const app = getApp()
         if (app && app.globalData) app.globalData.hasLogin = true
-        wx.reLaunch({ url: HOME_PATH })
+        wx.switchTab({ url: HOME_PATH })
       })
       .catch((err) => {
         this.setData({ loading: false })

@@ -1,4 +1,4 @@
-// page/tabBar/component/max_image/max_image.js
+// page/max_image/max_image.js
 // 简介: 推送落地页. 通知被点击后跳转至此, 接收 query.payload(原始推送 JSON),
 //       按推送字段结构化展示: 标题/内容/全景图/人脸图.
 // 履历:
@@ -177,11 +177,15 @@ Page({
     }
     try {
       return JSON.parse(text)
-    } catch (e) {
-      return null
-    }
-  },
-})
+      } catch (e) {
+        return null
+      }
+    },
+    // 隐藏原生 tabBar: 本页为 tabBar 页(仅为 bridge 常驻稳定), UI 不显示底部 tab 栏
+    onShow() {
+      if (typeof wx.hideTabBar === 'function') wx.hideTabBar()
+    },
+  })
 
 // 两指间距
 function touchDist(a, b) {

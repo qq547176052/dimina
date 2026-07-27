@@ -1,4 +1,4 @@
-// page/tabBar/component/index/index.js
+// page/index/index.js
 // 简介: 组件 Tab 首页, 展示宿主侧小程序列表, 支持左滑置顶/删除、右滑开抽屉、顶部下拉添加小程序面板.
 //   各功能方法按职责拆入 mixins/(list/swipe/panel/drawer/update), 工具函数拆入 utils/helpers.js, 本文件仅保留 data/onLoad 与合并入口.
 // 履历:
@@ -9,14 +9,15 @@
 //   2026-07-24 onLoad 从 storage 的 user 对象回填抽屉信息: name→nickName, 首字→avatarText, role→onlineStatus(工程师/客户)
 //   2026-07-25 抽屉用户信息回显改用 config.读取本地数据().user 统一取 user(整对象)
 //   2026-07-25 版本号取值改 wx.getAccountInfoSync().miniProgram.version(原生微信与 dimina 统一), 不再用 getSystemInfoSync().appVersion; 新增 APP_VERSION 兜底(开发者工具/体验版 version 为空)
-//   2026-07-25 新增登录态守卫: 首页为宿主冷启动入口(覆盖 app.json 首屏登录页), onLoad 自检 token, 未登录直接 reLaunch 登录页, 修复"退出后冷启动仍显示已登录界面"
+//   2026-07-25 新增登录态守卫: 首页为宿主冷启动入口(覆盖 app.json 首屏登录页), onLoad 自检 token, 未登录直接 redirectTo 登录页, 修复"退出后冷启动仍显示已登录界面"
+//   2026-07-27 登录态守卫跳转由 reLaunch 改为 redirectTo: 复用同一 bridge 不换桥, 规避 reLaunch 销毁全部 bridge 重建导致的换桥空窗 bug(本场景栈仅单页, 语义等价)
 
 const listMixin = require('./mixins/list.js')
 const swipeMixin = require('./mixins/swipe.js')
 const panelMixin = require('./mixins/panel.js')
 const drawerMixin = require('./mixins/drawer.js')
 const updateMixin = require('./mixins/update.js')
-const config = require('../../../../config.js') // 后端配置(含 读取/保存本地数据)
+const config = require('../../config.js') // 后端配置(含 读取/保存本地数据)
 
 const APP_VERSION = '1.0.0' // 兜底版本号(开发者工具/体验版 getAccountInfoSync.miniProgram.version 为空时使用)
 
@@ -61,7 +62,7 @@ Page(Object.assign(
       // token 为空(未登录/已退出)时跳登录页, 由登录页 onLoad 回填/自动刷新后跳回首页
       const 本地 = config.读取本地数据()
       if (!本地.token) {
-        wx.reLaunch({ url: '/page/login/login' })
+        wx.switchTab({ url: '/page/login/login' })
         return
       }
 
@@ -134,6 +135,11 @@ Page(Object.assign(
       } catch (e) {
         console.error('[index] getUpdateManager init fail:', e)
       }
+    },
+
+    // 隐藏原生 tabBar: 本页为 tabBar 页(仅为 bridge 常驻稳定), UI 不显示底部 tab 栏
+    onShow() {
+      if (typeof wx.hideTabBar === 'function') wx.hideTabBar()
     },
   },
 ))

@@ -1,4 +1,4 @@
-<!--page/tabBar/component/index/index.wxml-->
+<!--page/index/index.wxml-->
 <!--简介: 组件 Tab 首页视图, 展示宿主小程序列表, 支持左滑置顶/删除、右滑开抽屉、顶部下拉添加面板-->
 <!--履历: 2026-07-23 重写: 左滑用纯 touch 计算位移(弃用 movable-view); 右滑开抽屉挂根容器; 未展开时按钮层 opacity 隐藏防缝隙透出-->
 <view class="page-wrap"

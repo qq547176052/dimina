@@ -1,4 +1,4 @@
-// page/tabBar/component/index/utils/helpers.js
+// page/index/utils/helpers.js
 // 简介: 列表过滤与颜色生成等纯函数, 被各 mixin 共用; 颜色与宿主 Utils.generateColorFromName 保持一致
 // 履历:
 //   2026-07-24 从 index.js 抽出, 按功能拆分多文件

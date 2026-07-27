@@ -1,4 +1,4 @@
-// page/tabBar/component/index/mixins/panel.js
+// page/index/mixins/panel.js
 // 简介: 顶部下拉添加小程序面板(手势关闭)与添加表单相关方法
 // 履历:
 //   2026-07-24 从 index.js 抽出, 按功能拆分多文件

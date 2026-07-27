@@ -1,9 +1,8 @@
 {
   "pages": [
     "page/login/login",
-    "page/tabBar/component/index/index",
-    "page/tabBar/component/max_image/max_image"
-
+    "page/index/index",
+    "page/max_image/max_image"
   ],
   "window": {
     "navigationBarTextStyle": "black",
@@ -15,6 +14,26 @@
     "backgroundColor": "#F8F8F8"
   },
 
+  "tabBar": {
+    "color": "#7A7E83",
+    "selectedColor": "#07C160",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "page/login/login",
+        "text": "登录"
+      },
+      {
+        "pagePath": "page/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "page/max_image/max_image",
+        "text": "大图"
+      }
+    ]
+  },
 
   "networkTimeout": {
     "request": 10000,

@@ -1,4 +1,4 @@
-// page/tabBar/component/index/mixins/update.js
+// page/index/mixins/update.js
 // 简介: 小程序远程更新(方案1: 宿主从 cnb 下载并装到 .pending, 引擎 applyUpdate 冷重启)
 // 履历:
 //   2026-07-24 从 index.js 抽出, 按功能拆分多文件

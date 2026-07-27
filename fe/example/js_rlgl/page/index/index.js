@@ -2,6 +2,7 @@
 // 履历:
 //   2026-07-25 清空小程序: 首页由 example/index 迁移至 page/index, 作为底部 tab 抓拍记录; token 校验/无账号跳转登录页
 //   2026-07-25 以 mp-weixin/pages/face-records 为参考, 改造成人脸抓拍记录列表: 分页加载/下拉刷新/上拉加载更多/抓拍图下载/点击记录"添加人脸库"入库; 数据键全部 ASCII 命名(避开 WXML 中文标识符报错)
+//   2026-07-27 筛选时间默认初始化为当前日期: startTime=今天(拼 00:00:00)、endTime=今天(拼 23:59:59), 打开即按"今天 0 点~今天"筛选, 无需手动选
 const config = require('../../config.js')
 const api = require('../../utils/api.js')
 
@@ -84,6 +85,14 @@ function 取Token过期时间(token) {
   }
 }
 
+// 当前日期 YYYY-MM-DD(本地时区), 用于筛选时间默认初始化(今天 00:00:00 ~ 23:59:59)
+function 今天日期() {
+  const d = new Date()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
 // 把一行原始记录规范化为列表项
 function normalizeRecord(row) {
   if (!row || typeof row !== 'object') return null
@@ -129,8 +138,8 @@ Page({
       name: '',
       alias: '',
       faceLibrary: '',
-      startTime: '',
-      endTime: '',
+      startTime: 今天日期(),
+      endTime: 今天日期(),
     },
     filterTypeIndex: 0,
     faceLibraryFilterOptions: FACE_LIBRARY_FILTER_OPTIONS,

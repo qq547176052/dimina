@@ -1,4 +1,4 @@
-// page/tabBar/component/index/mixins/list.js
+// page/index/mixins/list.js
 // 简介: 列表相关方法(获取/搜索/点击/置顶/删除/滑动态管理), 经宿主管理扩展模块(模块名=本小程序 appId)通信
 // 履历:
 //   2026-07-24 从 index.js 抽出, 按功能拆分多文件

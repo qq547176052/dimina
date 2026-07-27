@@ -1,4 +1,4 @@
-// page/tabBar/component/index/mixins/swipe.js
+// page/index/mixins/swipe.js
 // 简介: 列表项左滑(置顶/删除)手势与页面级右滑开抽屉手势相关方法
 // 履历:
 //   2026-07-24 从 index.js 抽出, 按功能拆分多文件

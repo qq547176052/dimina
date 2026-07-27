@@ -1,4 +1,4 @@
-/* page/tabBar/component/index/index.wxss */
+/* page/index/index.wxss */
 /* 简介: 组件 Tab 首页样式, 小程序列表(仿宿主 MainActivity), 支持左滑置顶/删除 */
 /* 履历: 2026-07-22 新增小程序列表样式, 参考宿主 MainActivity */
 /* 履历: 2026-07-22 页面改为 flex 列布局, 底部新增版本号 footer */

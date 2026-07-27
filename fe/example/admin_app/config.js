@@ -8,6 +8,7 @@
 // 履历: 2026-07-24 新增 config.login(account, password)→config.登录(账号, 密码): 封装登录 API(内部 sha256 哈希 + 保存 token/user/userName), 供登录页与 token 过期时其它文件直接调用重新登录
 //   2026-07-25 新增 本地数据(模板)/读取本地数据()/保存本地数据(数据): 合并到单一对象; 读取同步返回本地整对象, 并异步经 兼容.宿主读取本地数据/宿主保存本地数据 读写宿主共享文件(module=本小程序 appId, 多小程序共享); 微信环境无 extBridge 时仅本地 storage
 //   2026-07-25 修复退出登录"清不干净/自动弹回首页": 保存本地数据 改为直接读 wx.getStorageSync(不再经 读取本地数据 触发异步宿主合并回写污染), 并返宿主推送 Promise(供 await 等清空成功再切页); 退出登录由 _logout 在清空成功后才 reLaunch 登录页
+//   2026-07-27 config.登录 增加内置 5 秒超时: wx.request 加 timeout 选项 + Promise 内置 setTimeout(5000) reject(已结束 标志防重复 settle), 保证请求/换桥丢回调时 Promise 仍能在 JsCore 存活期内 settle, 避免调用方(setData loading)永久卡在"登录中"; 前端 JS 定时器随 JsCore 销毁会失效, 真·换桥空窗丢回调需框架方案 B 根治
 const sha256 = require('./utils/sha256.js') // 纯 JS SHA-256(无第三方依赖)
 const 兼容 = require('./compatibility.js') // 运行环境兼容层(含 宿主读取本地数据/宿主保存本地数据)
 
@@ -66,12 +67,23 @@ var config = {
  */
 config.登录 = function (username, password) {
   return new Promise((resolve, reject) => {
+    // 内置 5 秒超时: 后端无响应/换桥丢回调时, 保证 Promise 在 JsCore 存活期内必 settle, 避免调用方(setData loading)永久卡在"登录中"
+    let 已结束 = false
+    const 超时定时器 = setTimeout(() => {
+      if (已结束) return
+      已结束 = true
+      reject(new Error('登录超时，请重试'))
+    }, 5000)
     wx.request({
       url: config.api登录链接,
       method: 'POST',
       header: { 'content-type': 'application/json' },
       data: { username: username, password: sha256(password) },
+      timeout: 8000, // 原生层兜底(晚于内置定时器, 让"登录超时"提示优先)
       success: (res) => {
+        if (已结束) return
+        clearTimeout(超时定时器)
+        已结束 = true
         // 兼容 { token, user } 或 { data: { token, user } } 结构; 按后端实际返回调整
         const body = res.data || {}
         const data = body.data || {}
@@ -87,6 +99,9 @@ config.登录 = function (username, password) {
         }
       },
       fail: () => {
+        if (已结束) return
+        clearTimeout(超时定时器)
+        已结束 = true
         reject(new Error('网络错误, 请稍后重试'))
       },
     })
