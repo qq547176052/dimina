@@ -14,6 +14,7 @@
 //   2026-07-25 本地数据统一封装为整对象(config.读取本地数据/保存本地数据), 所有 storage 操作走该对象(单一键'本地数据')
 //   2026-07-25 修正 HOME_PATH: 由越界旧路径(/page/tabBar/component/index/index)改为 js_rlgl 首页 /page/index/index(配合底部 tabBar 抓拍记录)
 //   2026-07-27 登录/刷新跳转由 reLaunch 改为 switchTab: 首页为 tabBar 页, redirectTo 跳 tab 页会被容器拦截失败(can not redirectTo a tabbar page), 故用 switchTab(跳 tab 页官方推荐, 仅销毁非 tab 的 login 并保留 tab 池, 比 reLaunch 轻量); 注: switchTab 仍换桥, 换桥空窗 bug 待框架方案 B(常驻 invoke 处理器)根治
+//   2026-07-27 修正"无保存账号密码且 token 快过期"分支: 原直接 switchTab 进首页会让即将过期(且无法静默续期)的 token 进首页、中途失效被踢; 改为留在登录页由用户手动登录(showToast 提示)
 const config = require('../../config.js') // 后端配置(含 api登录链接/login 函数 与 storage 键常量)
 const HOME_PATH = '/page/index/index'
 
@@ -82,8 +83,11 @@ Page({
           })
         return
       }
-      // 无保存的账号密码, 无法刷新, 直接进入首页
-      wx.switchTab({ url: HOME_PATH })
+      // 无保存的账号密码, 无法刷新: 不跳首页, 留在登录页由用户手动登录
+      // (token 仍有效但即将过期且无法静默续期, 进首页会中途失效被踢; 故留在当前页重新登录)
+      // wx.showToast({ title: '请重新登录', icon: 'none' })
+      console.log('token快过期, 本地没有保存账号密码, 无法自动刷新,需要手动登录')
+      return
     }
   },
 

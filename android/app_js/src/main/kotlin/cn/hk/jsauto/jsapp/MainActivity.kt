@@ -56,6 +56,7 @@ import java.util.zip.ZipOutputStream
  *   2026-07-25 新增"下载小程序"事件(downloadminiapp.kt): 扫一扫识别 "cnb下载小程序=<appId>" 后从 cnb 下载并静默装包激活; 小程序列表合并 assets 与沙盒(filesDir/jsapp), 使下载/更新的小程序均可见
  *   2026-07-25 新增"获取小程序信息"事件(fetchMiniAppInfo): 从 cnb config.json 读 name/version, 供前端扫码确认框展示友好名称(空则前端回退 appId); 增加 url/响应码/原始内容/解析 name 诊断日志便于排查取不到 name
  *   2026-07-25 扫码下载(downloadminiapp.kt)改为强制装包(引擎 activatePendingUpdate force=true), 显式安装覆盖同版本不再跳过; 引擎 RemoteUpdateManager.activatePendingUpdate 新增 force 参数(默认 false, 更新/后台更新流程保持版本守卫)
+ *   2026-07-27 修复"删除后再次扫码安装列表不显示": "下载小程序"成功回调中将 appId 从 deletedAppIds 内存屏蔽集合移除, 否则重装后仍被"获取列表"过滤掉而装了不显示
  */
 class MainActivity : ComponentActivity() {
 
@@ -557,7 +558,18 @@ class MainActivity : ComponentActivity() {
                     if (appId.isNullOrBlank()) {
                         callback.onFail(failMsg("下载小程序失败: 二维码格式不正确(应为 cnb下载小程序=<appId>)"))
                     } else {
-                        DownloadMiniApp.download(this@MainActivity, appId, callback)
+                        // 扫码安装为显式重装: 成功后将 appId 移出"已删除"内存屏蔽集合,
+                        // 使随后调用的"获取列表"重新显示该小程序(删除仅内存加集合不持久化, 若不移除会"装了却不显示")
+                        val wrapped = object : com.didi.dimina.api.ext.ExtCallback {
+                            override fun onSuccess(result: org.json.JSONObject) {
+                                deletedAppIds.remove(appId)
+                                callback.onSuccess(result)
+                            }
+                            override fun onFail(error: org.json.JSONObject) {
+                                callback.onFail(error)
+                            }
+                        }
+                        DownloadMiniApp.download(this@MainActivity, appId, wrapped)
                     }
                     null
                 }

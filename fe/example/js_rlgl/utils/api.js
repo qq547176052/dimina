@@ -1,17 +1,30 @@
 // 抓拍记录/人脸库 API 封装(原生小程序, 不依赖 uni-app 运行时)
 // 履历:
 //   2026-07-25 新增: 以 mp-weixin 的 faceRecordsApi/faceLibraryWxApi 为参考, 实现原生 wx.request 封装; 鉴权用 config 本地数据的 token(Bearer); 抓拍图相对路径拼接 BASE 后由 downloadFile 带鉴权下载为临时文件
+//   2026-07-27 token 缓存化: 新增模块级 _tokenCache + setToken(), authHeaders() 优先用缓存(页面打开时由 确保Token 写入一次), 不再每条请求都调 config.读取本地数据() 取 token; 未写入时惰性从 config 读一次兜底(保证首请求带鉴权)
 const config = require('../config.js')
 
 const BASE = `https://${config.host}`
 
+// token 缓存: 小程序打开时由页面读取一次本地数据写入(见 page/index/index.js 确保Token), 后续所有请求复用,
+// 不再每条请求都调 config.读取本地数据() 取 token(消除"每读一次头像/每发一条请求就读一次本地数据"的放大)
+let _tokenCache = null
+
+// 写入/刷新 token 缓存: 页面 onLoad/onShow 读一次本地数据后调用; 登录成功换发新 token 后再次调用更新
+function setToken(token) {
+  _tokenCache = (token != null && token !== '') ? token : null
+}
+
 // 取本地数据中的 token, 组装鉴权头(同时带 Cookie 与 Authorization, 与后端/auth 约定一致)
+// 优先用 _tokenCache(页面写入一次, 全程复用); 未写入时惰性从 config 读一次并缓存(兜底, 保证首请求也能带鉴权)
 function authHeaders() {
-  const { token } = config.读取本地数据()
+  if (_tokenCache == null) {
+    _tokenCache = (config.读取本地数据().token) || null
+  }
   const h = { 'content-type': 'application/json' }
-  if (token) {
-    h.Cookie = `token=${token}`
-    h.Authorization = `Bearer ${token}`
+  if (_tokenCache) {
+    h.Cookie = `token=${_tokenCache}`
+    h.Authorization = `Bearer ${_tokenCache}`
   }
   return h
 }
@@ -78,7 +91,7 @@ const faceLibrary = {
   },
 }
 
-module.exports = { BASE, authHeaders, faceRecords, faceLibrary }
+module.exports = { BASE, authHeaders, setToken, faceRecords, faceLibrary }
 
 /*
 

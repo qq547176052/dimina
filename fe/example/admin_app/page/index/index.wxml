@@ -24,7 +24,7 @@
   <scroll-view
     class="page"
     scroll-y="{{!swipeLock}}"
-    refresher-enabled="{{true}}"
+    refresher-enabled="{{panelEnabled}}"
     refresher-default-style="none"
     bindrefresherrefresh="onRefresherRefresh"
     refresher-triggered="{{triggered}}"
@@ -74,6 +74,7 @@
 
   <!-- 下拉面板: 添加小程序 -->
   <view
+    wx:if="{{panelEnabled}}"
     class="pull-mask {{panelTransition ? 'transition' : ''}}"
     style="transform: translateY({{panelY}}px); opacity: {{panelOpacity}};"
   >

@@ -1,19 +1,18 @@
 /* page/login/login.wxss */
 /* 简介: 登录页样式, 居中卡片式表单, 主色与首页抽屉一致(#07C160) */
-/* 履历: 2026-07-23 新建; 2026-07-24 新增登录页"保存账号密码"开关样式 */
+/* 履历: 2026-07-23 新建; 2026-07-24 新增登录页"保存账号密码"开关样式; 2026-07-27 输入框/按钮改 width:100%+border-box, 清 button 默认内边距与边框; 同日 .login-form 改 align-self:stretch(对齐 .page 模式)无效; 改 .login-wrap 由 flex 改为块级流(text-align:center + margin:auto 居中), .login-form 用 width:auto 块级天然对称, 规避 dimina webview 对 flex 拉伸右 padding 解析异常导致左右不对称; 同日 .login-input 补 text-align:left 覆盖 .login-wrap 继承的居中; 同日 login.wxml 用 view 包裹 input, wxss 拆分 .login-input-wrap 容器与 .login-input 输入样式, 规避 dimina 的 dd-input 组件根节点宽度/背景渲染异常 */
 
 .login-wrap {
   min-height: 100vh;
   background: #F8F8F8;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  text-align: center;
   box-sizing: border-box;
 }
 
 .login-logo {
   width: 140rpx;
   height: 140rpx;
+  margin: 0 auto;
   border-radius: 32rpx;
   background: #07C160;
   color: #FFFFFF;
@@ -25,6 +24,7 @@
 }
 
 .login-title {
+  display: block;
   margin-top: 32rpx;
   font-size: 40rpx;
   font-weight: 600;
@@ -32,29 +32,38 @@
 }
 
 .login-sub {
+  display: block;
   margin-top: 12rpx;
   font-size: 26rpx;
   color: #9AA0A6;
 }
 
 .login-form {
-  width: 100%;
   padding: 80rpx 64rpx 0;
   box-sizing: border-box;
 }
 
-.login-input {
+.login-input-wrap {
+  width: 100%;
+  box-sizing: border-box;
   height: 96rpx;
   background: #FFFFFF;
   border-radius: 16rpx;
   padding: 0 32rpx;
+  margin-bottom: 28rpx;
+}
+
+.login-input {
+  width: 100%;
+  height: 100%;
+  text-align: left;
   font-size: 30rpx;
   color: #1F2329;
-  margin-bottom: 28rpx;
 }
 
 .login-ph {
   color: #B8BDC4;
+  text-align: left;
 }
 
 .login-save {
@@ -74,7 +83,10 @@
 }
 
 .login-btn {
+  width: 100%;
+  box-sizing: border-box;
   margin-top: 24rpx;
+  padding: 0;
   height: 96rpx;
   line-height: 96rpx;
   border-radius: 16rpx;
@@ -82,6 +94,10 @@
   color: #FFFFFF;
   font-size: 32rpx;
   font-weight: 600;
+}
+
+.login-btn::after {
+  border: none;
 }
 
 .login-btn.disabled {

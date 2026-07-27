@@ -3,6 +3,7 @@
 //   2026-07-25 清空小程序: 首页由 example/index 迁移至 page/index, 作为底部 tab 抓拍记录; token 校验/无账号跳转登录页
 //   2026-07-25 以 mp-weixin/pages/face-records 为参考, 改造成人脸抓拍记录列表: 分页加载/下拉刷新/上拉加载更多/抓拍图下载/点击记录"添加人脸库"入库; 数据键全部 ASCII 命名(避开 WXML 中文标识符报错)
 //   2026-07-27 筛选时间默认初始化为当前日期: startTime=今天(拼 00:00:00)、endTime=今天(拼 23:59:59), 打开即按"今天 0 点~今天"筛选, 无需手动选
+//   2026-07-27 token 改为打开时读一次(确保Token 读本地数据写入 this.data.token 与 api.setToken 缓存), 后续所有请求经 api.authHeaders 复用缓存, 不再每条请求(尤其每读一张抓拍图)都读本地数据; 登录换发新 token 后同步刷新 data 与 api 缓存
 const config = require('../../config.js')
 const api = require('../../utils/api.js')
 
@@ -118,6 +119,7 @@ Page({
   mixins: [require('../../mixin/common')],
   data: {
     list: [],
+    token: '',       // 鉴权 token(打开时由 确保Token 读一次本地数据写入, 后续请求复用, 不重复读本地)
     loading: false,
     loadingMore: false,
     refreshing: false,
@@ -167,6 +169,9 @@ Page({
   确保Token() {
     const data = config.读取本地数据()
     const { 用户名, 密码, token } = data
+    // 打开时读一次本地 token: 存页面 data + 写入 api 缓存, 后续所有请求直接复用, 不再每条请求读本地数据
+    this.setData({ token })
+    api.setToken(token)
     // 无用户名或密码: 跳转到登录页面
     if (!用户名 || !密码) {
       wx.redirectTo({ url: '/page/login/login' })
@@ -181,7 +186,12 @@ Page({
     }
     // token 缺失或快过期: 用本地账号密码重新登录后再加载
     config.登录(用户名, 密码)
-      .then(() => this.加载列表(true))
+      .then((res) => {
+        // 登录换发新 token: 同步刷新页面 data 与 api 缓存
+        api.setToken(res.token)
+        this.setData({ token: res.token })
+        this.加载列表(true)
+      })
       .catch((e) => {
         this.setData({ loadError: '登录失败: ' + (e && e.message || '未知错误'), list: [], loading: false, loadingMore: false, refreshing: false })
         wx.showToast({ title: this.data.loadError, icon: 'none' })

@@ -14,6 +14,7 @@ module.exports = {
   // 面板打开期间保持刷新中(列表被遮罩覆盖无感), 关闭时收起, 避免 setTimeout 竞态导致下拉失效
   onRefresherRefresh() {
     // 原生下拉刷新触发: 打开添加小程序面板
+    if (!this.data.panelEnabled) return // 下拉面板总开关关闭时不响应
     this._setPanel(true)
   },
 
