@@ -5,10 +5,8 @@
 //             编辑模式按 name 拉取当前值回填; 保存成功返回列表并刷新
 //   2026-07-27 索引改 pid: originalPid 可靠索引(协议 /person/* 主键); 提交带 pid 走 camera 端点
 //             (api.faceLibraryCamera.update), 不再仅依赖 name(避免重名/改名/非 ASCII 名传输丢字段)
-//   2026-07-27 修复"pid 或 name 必填": 编辑回填时按 pid 精确定位行并写回 originalPid,
-//             提交前无 pid 直接拦截提示, 避免 query 缺字段导致后端校验失败
-//   2026-07-27 pid-only 重构: 彻底弃用 name 作索引; onLoad 缺 pid 直接报错; 拉取并回填仅按 pid 查行;
-//             提交仅发送 pid(改名带 newName), 不回退 name; 列表已用 data-pid 直传, 杜绝重名串号丢 pid
+//   2026-07-27 索引改 pid: originalPid 可靠索引(协议 /person/* 主键); 提交带 pid 走 camera 端点
+//             (api.faceLibraryCamera.update), 不再仅依赖 name(避免重名/改名/非 ASCII 名传输丢字段)
 const config = require('../../config.js')
 const api = require('../../utils/api.js')
 

@@ -57,14 +57,19 @@ export function createProxyApp({ allowedOrigins = process.env.DIMINA_PROXY_ALLOW
 				? Math.min(Math.max(parsedTimeout, 1), 30000)
 				: 30000
 
+			// 合并转发头: 按小写 key 归一化, 让请求方显式设置的 content-type 覆盖默认的 json,
+			// 避免同时出现大小写不同的两个 Content-Type 头(如代理默认大写 Content-Type: application/json
+			// 与小程序设置的小写 content-type: application/x-www-form-urlencoded 并存), 否则后端按
+			// json 解析而 c.PostForm 全空, 表现为 dimina 下表单参数丢失(微信直连正常)
+			const mergedHeaders = { 'content-type': 'application/json' }
+			for (const [k, v] of Object.entries(sanitizeRequestHeaders(header))) {
+				mergedHeaders[k.toLowerCase()] = v
+			}
 			const response = await axios({
 				method: normalizedMethod,
 				url: target.href,
 				timeout: boundedTimeout,
-				headers: {
-					'Content-Type': 'application/json',
-					...sanitizeRequestHeaders(header),
-				},
+				headers: mergedHeaders,
 				...(normalizedMethod !== 'GET' && { data }),
 				...(normalizedMethod === 'GET' && data && { params: data }),
 				responseType,
