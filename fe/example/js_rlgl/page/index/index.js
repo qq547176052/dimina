@@ -2,10 +2,13 @@
 // 履历:
 //   2026-07-25 清空小程序: 首页由 example/index 迁移至 page/index, 作为底部 tab 抓拍记录; token 校验/无账号跳转登录页
 //   2026-07-25 以 mp-weixin/pages/face-records 为参考, 改造成人脸抓拍记录列表: 分页加载/下拉刷新/上拉加载更多/抓拍图下载/点击记录"添加人脸库"入库; 数据键全部 ASCII 命名(避开 WXML 中文标识符报错)
-//   2026-07-27 筛选时间默认初始化为当前日期: startTime=今天(拼 00:00:00)、endTime=今天(拼 23:59:59), 打开即按"今天 0 点~今天"筛选, 无需手动选
+//   2026-07-27 筛选时间默认改为"不限": startTime/endTime 默认空(构建筛选参数时空值不发送, 后端即全量); 删除仅用于默认今天的 今天日期() 死代码; resetFilter 同样清空到不限
 //   2026-07-27 token 改为打开时读一次(确保Token 读本地数据写入 this.data.token 与 api.setToken 缓存), 后续所有请求经 api.authHeaders 复用缓存, 不再每条请求(尤其每读一张抓拍图)都读本地数据; 登录换发新 token 后同步刷新 data 与 api 缓存
+//   2026-07-27 列表项点击跳转 max_image 大图详情: app.json 注册 max_image; record-card bindtap=onItemTap 传 payload(姓名/时间·摄像头·类型 + 人脸图 jpeg_url_face + 全景图 jpeg_url_body, 相对路径拼绝对地址); 入库按钮改 catchtap 阻止冒泡; 后端 /dd/face-records 已返回 jpeg_url_body, 无需改后端
+//   2026-07-28 onItemTap 跳转改 base64 传输(payload 经 utf8ToBase64 编码 + enc=1 标记), 取代 encodeURIComponent(JSON), 彻底规避 max_image 端二次 URL 编码导致 404; max_image 据 enc 标记走 base64 解码, 与宿主推送原始 JSON(旧逻辑)并存
 const config = require('../../config.js')
 const api = require('../../utils/api.js')
+const base64 = require('../../utils/base64.js')
 
 const PAGE_SIZE = 20
 // 右侧筛选抽屉手势阈值(px): 页面右到左滑超阈值开; 抽屉内左到右滑超阈值关
@@ -86,14 +89,6 @@ function 取Token过期时间(token) {
   }
 }
 
-// 当前日期 YYYY-MM-DD(本地时区), 用于筛选时间默认初始化(今天 00:00:00 ~ 23:59:59)
-function 今天日期() {
-  const d = new Date()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${m}-${day}`
-}
-
 // 把一行原始记录规范化为列表项
 function normalizeRecord(row) {
   if (!row || typeof row !== 'object') return null
@@ -111,6 +106,7 @@ function normalizeRecord(row) {
     faceLibrary,
     faceLibraryLabel: faceLibrary ? (FACE_LIBRARY_MAP[faceLibrary] || faceLibrary) : '-',
     jpeg_url_face: facePath,
+    jpeg_url_body: row.jpeg_url_body || row.jpegUrlBody || '',
     faceDisplayUrl: '',
   }
 }
@@ -140,8 +136,8 @@ Page({
       name: '',
       alias: '',
       faceLibrary: '',
-      startTime: 今天日期(),
-      endTime: 今天日期(),
+      startTime: '',
+      endTime: '',
     },
     filterTypeIndex: 0,
     faceLibraryFilterOptions: FACE_LIBRARY_FILTER_OPTIONS,
@@ -341,6 +337,28 @@ Page({
     ;['name', 'alias', 'faceLibrary', 'startTime', 'endTime'].forEach((k) => { if (f[k]) count++ })
     this.setData({ filterCount: count, filterOpen: false })
     this.加载列表(true)
+  },
+  // 点击列表项: 跳转 max_image 大图详情(复用其 payload 解析, 展示 全景图/人脸图/姓名/时间/摄像头/类型)
+  onItemTap(e) {
+    const id = e.currentTarget.dataset.id
+    const item = this.data.list.find((r) => r.id === id)
+    if (!item) return
+    // 图片地址: 绝对/内联/本地直接传; 相对路径拼成带 BASE 的绝对地址(与 加载抓拍图 一致)
+    const toAbs = (p) => {
+      if (!p) return ''
+      if (/^https?:\/\//i.test(p) || p.indexOf('wxfile://') === 0 || p.indexOf('data:') === 0) return p
+      return api.faceRecords.imageUrl(p)
+    }
+    const payload = {
+      title: item.name || '未识别',
+      content: [item.time, item.cameraLabel, item.faceLibraryLabel].filter(Boolean).join('  ·  '),
+      image: toAbs(item.jpeg_url_face),
+      max_image: toAbs(item.jpeg_url_body),
+    }
+    // 用 base64 传输 payload 并加 enc 标记: base64 仅含 URI 安全字符, 彻底规避 query 传输造成的二次 URL 编码;
+    // base64 可能含 +/=, 故再 encodeURIComponent 一次, max_image 端由框架自动解回原始 base64
+    const b64 = base64.utf8ToBase64(JSON.stringify(payload))
+    wx.navigateTo({ url: `/page/max_image/max_image?enc=1&b64=${encodeURIComponent(b64)}` })
   },
   // 打开"添加人脸库"弹窗
   onAdd(e) {

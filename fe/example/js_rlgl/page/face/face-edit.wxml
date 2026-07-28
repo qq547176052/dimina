@@ -53,18 +53,6 @@
             <input class="field-input" placeholder="选填" value="{{form.icCardNo}}" data-field="icCardNo" bindinput="onInput"/>
         </view>
         <view class="form-field">
-            <text class="field-label">有效期类型</text>
-            <input class="field-input" placeholder="选填" value="{{form.validityType}}" data-field="validityType" bindinput="onInput"/>
-        </view>
-        <view class="form-field">
-            <text class="field-label">有效期开始</text>
-            <input class="field-input" placeholder="选填 yyyy-MM-dd" value="{{form.validityStartTime}}" data-field="validityStartTime" bindinput="onInput"/>
-        </view>
-        <view class="form-field">
-            <text class="field-label">有效期结束</text>
-            <input class="field-input" placeholder="选填 yyyy-MM-dd" value="{{form.validityEndTime}}" data-field="validityEndTime" bindinput="onInput"/>
-        </view>
-        <view class="form-field">
             <text class="field-label">其他</text>
             <input class="field-input" placeholder="选填" value="{{form.other}}" data-field="other" bindinput="onInput"/>
         </view>

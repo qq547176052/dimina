@@ -3,6 +3,10 @@
 //   2026-07-25 新增: 以 mp-weixin 的 faceRecordsApi/faceLibraryWxApi 为参考, 实现原生 wx.request 封装; 鉴权用 config 本地数据的 token(Bearer); 抓拍图相对路径拼接 BASE 后由 downloadFile 带鉴权下载为临时文件
 //   2026-07-27 token 缓存化: 新增模块级 _tokenCache + setToken(), authHeaders() 优先用缓存(页面打开时由 确保Token 写入一次), 不再每条请求都调 config.读取本地数据() 取 token; 未写入时惰性从 config 读一次兜底(保证首请求带鉴权)
 //   2026-07-27 删除改 POST+JSON(非 DELETE+query): 与编辑一致, 走 dimina 代理原生 JSON 通路, 避开代理对非 POST 方法参数的不确定性; 后端 F摄像头人脸删除 用 c.ShouldBind + Query 兜底
+//   2026-07-27 重构封装: 合并 faceLibrary 与 faceLibraryCamera 为单一 faceLibrary(删死代码 remove(DELETE)/syncStart/syncStatus/旧 update/imageUrl 本地版);
+//             抽出 parseResp(统一 wx.uploadFile/wx.request 响应判定) 与 uploadFileTo(统一 multipart 上传, header 不带 content-type); authHeaders 保留 contentType:false 仅供 uploadFileTo 使用
+//   2026-07-27 修复 add/编辑换照 multipart 参数丢失: authHeaders 增加 contentType:false 选项; wx.uploadFile 调用时省略 content-type, 避免 application/json 头污染 multipart 导致后端 PostForm 读不到 name/faceLibrary
+//   2026-07-27 同步切 camera/sync: request 增 timeout 透传(微信上限 60s); faceLibrary.sync 调 POST /dd/face-library/camera/sync(第一台→所有摄像头, 真镜像清理残留)
 const config = require('../config.js')
 
 const BASE = config.host // host 已含协议(见 config.js 环境列表: dev=http://, prod=https://)
@@ -18,11 +22,15 @@ function setToken(token) {
 
 // 取本地数据中的 token, 组装鉴权头(同时带 Cookie 与 Authorization, 与后端/auth 约定一致)
 // 优先用 _tokenCache(页面写入一次, 全程复用); 未写入时惰性从 config 读一次并缓存(兜底, 保证首请求也能带鉴权)
-function authHeaders() {
+// opts.contentType: 默认 application/json; 传 false 表示不设置 content-type(供 wx.uploadFile/multipart 使用)
+function authHeaders(opts = {}) {
   if (_tokenCache == null) {
     _tokenCache = (config.读取本地数据().token) || null
   }
-  const h = { 'content-type': 'application/json' }
+  const h = {}
+  if (opts.contentType !== false) {
+    h['content-type'] = opts.contentType || 'application/json'
+  }
   if (_tokenCache) {
     h.Cookie = `token=${_tokenCache}`
     h.Authorization = `Bearer ${_tokenCache}`
@@ -40,13 +48,14 @@ function buildUrl(path, params) {
   return `${url0}${url0.indexOf('?') >= 0 ? '&' : '?'}${pairs.join('&')}`
 }
 
-function request({ url, method = 'GET', data = {}, params = {} }) {
+function request({ url, method = 'GET', data = {}, params = {}, timeout } = {}) {
   return new Promise((resolve, reject) => {
     wx.request({
       url: buildUrl(url, params),
       method,
       data,
       header: authHeaders(),
+      timeout: timeout || undefined, // 微信 wx.request 上限 60000ms; 长任务(如摄像头全量同步)显式拉长
       success(res) {
         const body = res.data || {}
         if (res.statusCode >= 200 && res.statusCode < 300) resolve(body)
@@ -85,130 +94,83 @@ const faceRecords = {
   },
 }
 
+// 统一响应解析: 兼容 wx.uploadFile(string) 与 wx.request(parsed object)
+//   成功 = statusCode 2xx 且 body.success !== false 且 (body.code 为空 或 ===200)
+function parseResp(res) {
+  let body = res.data
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body) } catch (e) { body = {} }
+  }
+  const ok = res.statusCode >= 200 && res.statusCode < 300 &&
+    body.success !== false && (body.code == null || Number(body.code) === 200)
+  const err = ok ? null : new Error((body && (body.message || body.msg)) || `请求失败(${res.statusCode})`)
+  return { ok, body, err }
+}
+
+// 上传文件(multipart)到指定路径: 文件字段名 photo, formData 为其它表单字段
+//   header 不带 content-type(由微信自动设 multipart boundary), 避免 application/json 污染导致后端 PostForm 读不到字段
+function uploadFileTo(path, formData, filePath) {
+  return new Promise((resolve, reject) => {
+    wx.uploadFile({
+      url: `${BASE}${path}`,
+      filePath,
+      name: 'photo',
+      formData: formData || {},
+      header: authHeaders({ contentType: false }),
+      success: (res) => {
+        const r = parseResp(res)
+        if (r.ok) resolve(r.body)
+        else reject(r.err)
+      },
+      fail: (err) => reject(new Error((err && err.errMsg) || '网络请求失败')),
+    })
+  })
+}
+
+// 人脸库统一 API(直读摄像头链路为主; 仅「添加」走旧本地 xlsx 链路)
+//   后端 F摄像头人脸编辑 仅支持「编辑已存在人员」(无 pid/name 直接 404), 故新增暂不能并到 /camera 端点
 const faceLibrary = {
-  // 从抓拍记录加入人脸库
+  // 从抓拍记录入库(旧本地链路): POST /dd/face-library/wx-from-record
   addFromRecord(data) {
     return request({ url: '/dd/face-library/wx-from-record', method: 'POST', data })
   },
-  // 人脸库列表(GET, 筛选+分页)
-  list(params = {}) {
-    return request({ url: '/dd/face-library', method: 'GET', params }).then(unwrapList)
-  },
-  // 人脸照展示地址(拼绝对地址; <image> 网络图不可带鉴权头, 故由 wx.downloadFile 带鉴权取临时文件)
-  imageUrl(name) {
-    const n = String(name || '').trim()
-    if (!n) return ''
-    return `${BASE}/dd/face-library/image/${encodeURIComponent(n)}`
-  },
-  // 添加(上传文件 + 表单字段, multipart; 文件字段名 photo)
-  add(formData, filePath) {
-    return new Promise((resolve, reject) => {
-      wx.uploadFile({
-        url: `${BASE}/dd/face-library`,
-        filePath,
-        name: 'photo',
-        formData: formData || {},
-        header: authHeaders(),
-        success: (res) => {
-          let body = res.data
-          try { body = JSON.parse(res.data) } catch (e) { body = {} }
-          if (res.statusCode >= 200 && res.statusCode < 300 && body.success !== false && (body.code == null || Number(body.code) === 200)) resolve(body)
-          else reject(new Error(body.message || body.msg || `添加失败(${res.statusCode})`))
-        },
-        fail: (err) => reject(new Error((err && err.errMsg) || '网络请求失败')),
-      })
-    })
-  },
-  // 编辑: 带新照片走 wx.uploadFile(POST); 不换照走 JSON POST(后端 ShouldBind 兼容 JSON/表单)
-  update(formData, filePath) {
-    return new Promise((resolve, reject) => {
-      const header = authHeaders()
-      const onResp = (res) => {
-        let body = res.data
-        if (typeof body === 'string') { try { body = JSON.parse(res.data) } catch (e) { body = {} } }
-        if (res.statusCode >= 200 && res.statusCode < 300 && body.success !== false && (body.code == null || Number(body.code) === 200)) resolve(body)
-        else reject(new Error(body.message || body.msg || `编辑失败(${res.statusCode})`))
-      }
-      const onFail = (err) => reject(new Error((err && err.errMsg) || '网络请求失败'))
-      if (filePath) {
-        wx.uploadFile({ url: `${BASE}/dd/face-library`, filePath, name: 'photo', formData: formData || {}, header, method: 'POST', success: onResp, fail: onFail })
-      } else {
-        wx.request({
-          url: `${BASE}/dd/face-library`,
-          method: 'POST',
-          header,
-          data: formData,
-          success: onResp,
-          fail: onFail,
-        })
-      }
-    })
-  },
-  // 删除(DELETE query ?name=; 旧本地 xlsx 链路, name 索引)
-  remove(name) {
-    return request({ url: '/dd/face-library', method: 'DELETE', params: { name } })
-  },
-  // 发起全量同步(后台执行)
-  syncStart() {
-    return request({ url: '/dd/face-library/sync', method: 'POST', data: {} })
-  },
-  // 查询同步状态: data.code 0成功/1同步中/2异常
-  syncStatus() {
-    return request({ url: '/dd/face-library/sync', method: 'GET' })
-  },
-}
-
-// 人脸库「直读摄像头」新接口(与本地 xlsx 链路解耦, 数据实时从摄像头取)
-const faceLibraryCamera = {
-  // 人脸库列表(GET, 直读摄像头; 筛选+分页与旧 list 一致)
+  // 人脸库列表(GET, 直读第一台摄像头; 筛选+分页)
   list(params = {}) {
     return request({ url: '/dd/face-library/camera', method: 'GET', params }).then(unwrapList)
   },
-  // 人脸照展示地址(直读摄像头代理; <image> 网络图不可带鉴权头, 故由 wx.downloadFile 带鉴权取临时文件)
+  // 人脸照地址(直读摄像头代理; <image> 不可带鉴权头, 由 wx.downloadFile 带鉴权取临时文件)
   imageUrl(name) {
     const n = String(name || '').trim()
     if (!n) return ''
     return `${BASE}/dd/face-library/camera/image/${encodeURIComponent(n)}`
   },
-  // 编辑(直读摄像头): POST /dd/face-library/camera; 带新照片走 wx.uploadFile, 否则 JSON POST
-  //   formData 必含 pid(原人员唯一标识, 可靠索引) 或 name(兜底); 改名带 newName
-  //   用 POST+JSON 以走 dimina 代理最可靠的原生 JSON 通路(后端 ShouldBind 兼容 JSON/表单)
-  update(formData, filePath) {
-    return new Promise((resolve, reject) => {
-      const header = authHeaders()
-      const onResp = (res) => {
-        let body = res.data
-        if (typeof body === 'string') { try { body = JSON.parse(res.data) } catch (e) { body = {} } }
-        if (res.statusCode >= 200 && res.statusCode < 300 && body.success !== false && (body.code == null || Number(body.code) === 200)) resolve(body)
-        else reject(new Error(body.message || body.msg || `编辑失败(${res.statusCode})`))
-      }
-      const onFail = (err) => reject(new Error((err && err.errMsg) || '网络请求失败'))
-      if (filePath) {
-        wx.uploadFile({ url: `${BASE}/dd/face-library/camera`, filePath, name: 'photo', formData: formData || {}, header, method: 'POST', success: onResp, fail: onFail })
-      } else {
-        wx.request({
-          url: `${BASE}/dd/face-library/camera`,
-          method: 'POST',
-          header,
-          data: formData,
-          success: onResp,
-          fail: onFail,
-        })
-      }
-    })
+  // 添加(旧本地链路, multipart; 文件字段名 photo): 落本地 xlsx + 推主摄像头 + 专用同步 fan-out
+  add(formData, filePath) {
+    return uploadFileTo('/dd/face-library', formData, filePath)
   },
-  // 删除(直读摄像头): POST /dd/face-library/camera/delete {pid, name}; 走 dimina 代理原生 JSON 通路
-  //   pid 为可靠唯一索引(优先); 仅传 name 时后端按姓名兜底定位 pid
-  //   用独立子路径(非 /camera 同 path)以免与编辑 POST 冲突(Gin 不允许同 path 双 POST)
+  // 编辑(直读摄像头, POST /dd/face-library/camera): pid 定位; 带新照片走 multipart, 否则 JSON POST
+  //   走 dimina 代理原生 JSON 通路(后端 ShouldBind 兼容 JSON/表单)
+  update(formData, filePath) {
+    if (filePath) {
+      return uploadFileTo('/dd/face-library/camera', formData, filePath)
+    }
+    return request({ url: '/dd/face-library/camera', method: 'POST', data: formData })
+  },
+  // 删除(直读摄像头, POST /dd/face-library/camera/delete {pid, name}): pid 优先, 仅 name 时后端按姓名兜底
   remove(pid, name) {
     const data = {}
     if (pid) data.pid = pid
     else if (name) data.name = name
     return request({ url: '/dd/face-library/camera/delete', method: 'POST', data })
   },
+  // 同步(直读摄像头, POST /dd/face-library/camera/sync): 第一台→所有摄像头全量, 真镜像清理其余摄像头残留
+  //   阻塞返回(无异步状态, 前端直接等待不轮询); 耗时较长, 设 timeout 上限 60s
+  sync() {
+    return request({ url: '/dd/face-library/camera/sync', method: 'POST', data: {}, timeout: 60000 })
+  },
 }
 
-module.exports = { BASE, authHeaders, setToken, faceRecords, faceLibrary, faceLibraryCamera }
+module.exports = { BASE, authHeaders, setToken, faceRecords, faceLibrary }
 
 /*
 

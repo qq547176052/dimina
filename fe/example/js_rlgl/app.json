@@ -3,7 +3,8 @@
     "page/login/login",
     "page/index/index",
     "page/face/face",
-    "page/face/face-edit"
+    "page/face/face-edit",
+    "page/max_image/max_image"
   ],
   "window": {
     "navigationBarTextStyle": "black",

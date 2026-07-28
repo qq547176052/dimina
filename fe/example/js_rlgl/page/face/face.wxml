@@ -1,4 +1,8 @@
-<!-- 人脸库列表页: 搜索/类型筛选/分页, 行操作(action sheet 编辑/删除), 同步弹窗, FAB 新增; 风格参考 page/index -->
+<!-- 人脸库列表页: 搜索/类型筛选/分页, 行操作(action sheet 编辑/删除), 顶部同步(直接触发), FAB 新增; 风格参考 page/index -->
+<!--
+  履历:
+    2026-07-27 同步交互改直接触发: 顶部「同步」点击即开始同步(开始同步), 取消确认弹窗(原 syncOpen 弹窗已移除), 进度用 showLoading/toast 反馈
+-->
 <view class="page">
     <!-- 顶部栏: 标题 + 同步入口 -->
     <view class="topbar">
@@ -10,7 +14,7 @@
             <view class="add-btn" bindtap="onAdd">
                 <text class="add-btn-text">添加</text>
             </view>
-            <view class="sync-btn" bindtap="openSync">
+            <view class="sync-btn" bindtap="开始同步">
                 <text class="sync-btn-text">同步</text>
             </view>
         </view>
@@ -56,20 +60,4 @@
         <view wx:elif="{{list.length}}" class="status-tip status-footer">共 {{total}} 条</view>
     </scroll-view>
 
-    <!-- 同步弹窗 -->
-    <view wx:if="{{syncOpen}}" class="modal-mask" catchtap="closeSync" catchtouchmove="stopPropagation">
-        <view class="modal-box" catchtap="stopPropagation">
-            <view class="modal-title">人脸库同步</view>
-            <view class="sync-status sync-{{syncCode}}">
-                <text wx:if="{{syncCode === 0}}">✓ {{syncMessage || '同步成功'}}</text>
-                <text wx:elif="{{syncCode === 2}}">✕ {{syncMessage || '同步异常'}}</text>
-                <text wx:else>{{syncMessage || '准备中...'}}</text>
-            </view>
-            <view wx:if="{{syncing}}" class="sync-loading">同步进行中，请稍候...</view>
-            <view class="modal-actions">
-                <button wx:if="{{syncCode !== 1}}" class="modal-btn modal-btn-cancel" size="mini" bindtap="closeSync">关闭</button>
-                <button wx:if="{{!syncing}}" class="modal-btn modal-btn-submit" size="mini" bindtap="开始同步">{{syncCode === 0 || syncCode === 2 ? '重新同步' : '开始同步'}}</button>
-            </view>
-        </view>
-    </view>
 </view>

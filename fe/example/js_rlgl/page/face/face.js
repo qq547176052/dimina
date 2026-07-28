@@ -1,6 +1,10 @@
 // page/face/face.js
 // 简介: 人脸库列表页(tab 之二): 筛选/分页列表、同步、新增入口、行内编辑/删除; 风格参考 page/index
 // 履历:
+//   2026-07-27 同步交互改直接触发: 顶部「同步」bindtap 由 openSync 改 开始同步, 去掉确认弹窗; 开始同步 改用 wx.showLoading/showToast 反馈, 移除 openSync/closeSync/stopPropagation 及弹窗字段(syncOpen/syncMessage/syncCode)
+//   2026-07-27 同步改调直读摄像头 camera/sync(F摄像头人脸同步, 第一台→所有摄像头, 带真镜像清理其余摄像头残留):
+//             开始同步 改用 api.faceLibrary.sync()(同步阻塞返回, 无异步状态), 移除原轮询逻辑(轮询同步 已删);
+//             从根上解决"删除人员后旧全量同步把残留摄像头人员拉回(复活)"
 //   2026-07-27 新建: 列表(姓名/类型/部门 筛选 + 分页上拉加载)、行操作 action sheet(编辑/删除)、
 //             同步按钮(发起全量同步并轮询状态)、FAB 新增跳转 face-edit; 人脸照经 wx.downloadFile 带鉴权取临时文件
 //   2026-07-27 头像改直显: 后端 list 现直出摄像头照片直链 photoUrl(已加白域名), 前端优先 <image> 直显(同 index 抓拍图),
@@ -8,7 +12,7 @@
 //   2026-07-27 头像修正: 实测人脸库相机 IP(192.168.88.233)未加白到 image 合法域名, 直链 <image> 拉不到(列表期间无 /image 请求);
 //             改回后端代理 + wx.downloadFile(同 face-edit 回填预览, 后端域名已验证可用); 移除未用的 photoUrl 直显分支
 //   2026-07-27 索引改 pid: normalizeRecord 增 pid(可靠主键); 跳转编辑/删除均传 pid, 删除走 camera 端点(api.faceLibraryCamera.remove),
-//             不再以 name 为主键(避免重名/改名/非 ASCII 名传输丢字段)
+//             不再以 name 为主键(避免重名/改名/非 ASCII 名传输丢字段); 删除走 api.faceLibrary.remove
 //   2026-07-27 标题副行: 列表响应 data.cameraAlias 透传(第一台摄像头别名), 标题下方展示"当前操作摄像头"
 //             后端 F摄像头人脸列表 在 data 返回 cameraIP/cameraAlias, api.unwrapList 透传 meta, 本页写入 cameraAlias
 //   2026-07-27 交互改左滑删除: 列表项改为可左滑展开"删除"按钮(参考 admin_app/page/index 手势, 适配人脸库 pid 索引),
@@ -142,11 +146,8 @@ Page({
     filters: { name: '', faceLibrary: '', department: '' },
     filterOpen: false,
     filterCount: 0,
-    // 同步弹窗
-    syncOpen: false,
+    // 同步状态(防重入)
     syncing: false,
-    syncMessage: '',
-    syncCode: -1,
     // 左滑手势
     actionWidth: 0,   // 删除按钮区宽度(px), onShow 按屏幕宽度计算
     swipeLock: false, // 横向滑动进行中锁定滚动, 避免抢手势
@@ -195,7 +196,7 @@ Page({
     if (!this.data.hasMore && !reset) return
     const isFirst = this.data.page === 1
     this.setData(isFirst ? { loading: true } : { loadingMore: true })
-    api.faceLibraryCamera.list(Object.assign(
+    api.faceLibrary.list(Object.assign(
       { page: this.data.page, pageSize: PAGE_SIZE },
       this.构建筛选参数()
     ))
@@ -241,7 +242,7 @@ Page({
     const path = item.imageName
     if (!path || !item.name) return
     wx.downloadFile({
-      url: api.faceLibraryCamera.imageUrl(path),
+      url: api.faceLibrary.imageUrl(path),
       header: api.authHeaders(),
       success: (res) => {
         if (res.statusCode === 200 && res.tempFilePath) this.设置展示图(item.name, res.tempFilePath)
@@ -396,7 +397,7 @@ Page({
       success: (res) => {
         if (!res.confirm) return
         wx.showLoading({ title: '删除中...', mask: true })
-        api.faceLibraryCamera.remove(pid, '')
+        api.faceLibrary.remove(pid, '')
           .then(() => {
             wx.showToast({ title: '已删除', icon: 'success' })
             this.加载列表(true)
@@ -408,46 +409,23 @@ Page({
       },
     })
   },
-  // ===== 同步弹窗 =====
-  openSync() {
-    this.setData({ syncOpen: true, syncing: false, syncMessage: '', syncCode: -1 })
-  },
-  closeSync() {
-    this.setData({ syncOpen: false, syncing: false })
-  },
-  stopPropagation() {},
-  // 发起全量同步并轮询状态(data.code: 0成功/1同步中/2异常)
+  // 发起同步(直读摄像头 camera/sync: 第一台→所有摄像头, 带真镜像清理残留)
+  //   点击顶部「同步」直接触发, 用 showLoading 阻塞反馈, 完成/失败 toast; 不再弹确认框
   开始同步() {
     if (this.data.syncing) return
-    this.setData({ syncing: true, syncMessage: '正在发起同步...', syncCode: 1 })
-    api.faceLibrary.syncStart()
-      .then(() => this.轮询同步())
-      .catch((err) => {
-        this.setData({ syncing: false, syncMessage: (err && err.message) || '同步发起失败', syncCode: 2 })
-      })
-  },
-  轮询同步() {
-    if (!this.data.syncing) return
-    api.faceLibrary.syncStatus()
-      .then((res) => {
-        const body = res || {}
-        const code = (body.data && typeof body.data === 'object') ? Number(body.data.code) : (body.code != null ? Number(body.code) : -1)
-        const msg = body.message || ''
-        if (code === 0) {
-          this.setData({ syncing: false, syncMessage: '同步成功', syncCode: 0 })
-          this.加载列表(true)
-          return
-        }
-        if (code === 2) {
-          this.setData({ syncing: false, syncMessage: (msg || '同步异常'), syncCode: 2 })
-          return
-        }
-        // 1 同步中: 继续轮询
-        this.setData({ syncMessage: (msg || '同步中...'), syncCode: 1 })
-        setTimeout(() => this.轮询同步(), 2500)
+    this.setData({ syncing: true })
+    wx.showLoading({ title: '同步中...', mask: true })
+    api.faceLibrary.sync()
+      .then(() => {
+        wx.hideLoading()
+        this.setData({ syncing: false })
+        wx.showToast({ title: '同步成功', icon: 'success' })
+        this.加载列表(true)
       })
       .catch((err) => {
-        this.setData({ syncing: false, syncMessage: (err && err.message) || '查询同步状态失败', syncCode: 2 })
+        wx.hideLoading()
+        this.setData({ syncing: false })
+        wx.showToast({ title: (err && err.message) || '同步失败', icon: 'none' })
       })
   },
 })
