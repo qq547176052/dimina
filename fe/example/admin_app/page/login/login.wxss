@@ -1,6 +1,6 @@
 /* page/login/login.wxss */
 /* 简介: 登录页样式, 居中卡片式表单, 主色与首页抽屉一致(#07C160) */
-/* 履历: 2026-07-23 新建; 2026-07-24 新增登录页"保存账号密码"开关样式; 2026-07-27 输入框/按钮改 width:100%+border-box, 清 button 默认内边距与边框; 同日 .login-form 改 align-self:stretch(对齐 .page 模式)无效; 改 .login-wrap 由 flex 改为块级流(text-align:center + margin:auto 居中), .login-form 用 width:auto 块级天然对称, 规避 dimina webview 对 flex 拉伸右 padding 解析异常导致左右不对称; 同日 .login-input 补 text-align:left 覆盖 .login-wrap 继承的居中; 同日 login.wxml 用 view 包裹 input, wxss 拆分 .login-input-wrap 容器与 .login-input 输入样式, 规避 dimina 的 dd-input 组件根节点宽度/背景渲染异常 */
+/* 履历: 2026-07-23 新建; 2026-07-24 新增登录页"保存账号密码"开关样式; 2026-07-27 输入框/按钮改 width:100%+border-box, 清 button 默认内边距与边框; 同日 .login-form 改 align-self:stretch(对齐 .page 模式)无效; 改 .login-wrap 由 flex 改为块级流(text-align:center + margin:auto 居中), .login-form 用 width:auto 块级天然对称, 规避 dimina webview 对 flex 拉伸右 padding 解析异常导致左右不对称; 同日 .login-input 补 text-align:left 覆盖 .login-wrap 继承的居中; 同日 login.wxml 用 view 包裹 input, wxss 拆分 .login-input-wrap 容器与 .login-input 输入样式, 规避 dimina 的 dd-input 组件根节点宽度/背景渲染异常; 2026-07-28 底部新增 .login-footer 版本号样式(对齐首页 .footer 视觉) */
 
 .login-wrap {
   min-height: 100vh;
@@ -102,4 +102,12 @@
 
 .login-btn.disabled {
   opacity: 0.6;
+}
+
+.login-footer {
+  margin-top: 60rpx;
+  text-align: center;
+  font-size: 24rpx;
+  color: #999;
+  padding: 16rpx 0 calc(16rpx + env(safe-area-inset-bottom));
 }

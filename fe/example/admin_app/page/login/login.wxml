@@ -1,6 +1,6 @@
 <!--page/login/login.wxml-->
 <!--简介: 登录页视图, 账号密码输入 + 登录按钮, 风格与首页一致(微信绿)-->
-<!--履历: 2026-07-23 新建; 2026-07-24 新增"保存账号密码"开关(默认开, 关闭则不记住); 2026-07-27 用 view 包裹 input 拆容器/输入样式, 并对 login-form/login-input-wrap/login-btn 加内联 width:100%;box-sizing:border-box 兜底, 彻底规避 dimina scoped 隔离对宽度的不稳定处理 -->
+<!--履历: 2026-07-23 新建; 2026-07-24 新增"保存账号密码"开关(默认开, 关闭则不记住); 2026-07-27 用 view 包裹 input 拆容器/输入样式, 并对 login-form/login-input-wrap/login-btn 加内联 width:100%;box-sizing:border-box 兜底, 彻底规避 dimina scoped 隔离对宽度的不稳定处理; 2026-07-28 底部新增版本号 footer(与首页同源: wx.getAccountInfoSync().miniProgram.version, 兜底 APP_VERSION) -->
 
 <view class="login-wrap" style="padding-top: calc({{statusBarHeight}}px + 120rpx);">
   <view class="login-logo">JS</view>
@@ -33,4 +33,6 @@
     </view>
     <button class="login-btn {{loading ? 'disabled' : ''}}" style="width:100%;box-sizing:border-box;" bindtap="onLogin">{{loading ? '登录中...' : '登 录'}}</button>
   </view>
+
+  <view class="login-footer">版本 {{version}}</view>
 </view>

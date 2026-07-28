@@ -17,7 +17,9 @@
 //   2026-07-27 登录/刷新/直进首页跳转由 redirectTo 改为 switchTab: app.json 补齐 tabBar 配置(首页为 tab), redirectTo 跳 tabBar 页会被容器拦截失败(can not redirectTo a tabbar page) 且底层 updatePath 必 destroy+init 当前 bridge(换桥丢回调); switchTab 进入 tabBar 容器后首页 bridge 常驻不复建, 后续请求稳定(对齐 js_rlgl)
 //   2026-07-27 登录 5 秒超时收口到 config.登录 内部(单一来源, 覆盖 onLogin 与 onLoad 自动刷新两条路径): Promise 内置 setTimeout(5000) reject + wx.request timeout 选项; 超时/失败均 reject→.catch 复位 loading 并提示, 避免卡在"登录中"; 前端 JS 定时器随 JsCore 销毁会失效, 真·换桥空窗丢回调需框架方案 B 根治
 //   2026-07-27 login 纳入 tabBar(三页皆 tab): app.json tabBar list 新增 page/login/login; onShow 调 wx.hideTabBar 隐藏底部 tab 栏(仅为 bridge 常驻稳定); 首页/抽屉回登录页改用 switchTab 跳本 tab
+//   2026-07-28 底部新增版本号: 取值与首页同源(wx.getAccountInfoSync().miniProgram.version), 兜底 APP_VERSION; 同步 data.version 供 wxml 渲染
 const config = require('../../config.js') // 后端配置(含 api登录链接/login 函数 与 storage 键常量)
+const APP_VERSION = '1.0.0' // 兜底版本号(开发者工具/体验版 getAccountInfoSync.miniProgram.version 为空时使用)
 const HOME_PATH = '/page/index/index'
 
 Page({
@@ -27,6 +29,7 @@ Page({
     saveAccount: true, // 默认保存账号密码
     statusBarHeight: 0,
     loading: false, // 登录中禁用按钮防重复提交
+    version: '',     // 当前小程序版本名(取自 wx.getAccountInfoSync().miniProgram.version, 兜底 APP_VERSION)
   },
 
   // 检查 storage 是否有 token, 有则直接跳转到首页
@@ -37,6 +40,16 @@ Page({
       const info = wx.getSystemInfoSync()
       this.setData({ statusBarHeight: info.statusBarHeight || 0 })
     } catch (e) {}
+    // 小程序版本号: 原生微信/ dimina 均在 miniProgram.version 返回; 开发者工具/体验版为空, 回退兜底
+    let version = APP_VERSION
+    try {
+      const info = (typeof wx.getAccountInfoSync === 'function') ? wx.getAccountInfoSync() : {}
+      const mpVer = info.miniProgram && info.miniProgram.version
+      version = (typeof mpVer === 'string' && mpVer) ? mpVer : APP_VERSION
+    } catch (e) {
+      console.error('[login] getAccountInfoSync fail:', e)
+    }
+    this.setData({ version })
     // 读取本地持久化数据(整对象: token/user/是否保存/用户名/密码); 优先宿主共享数据(异步同步到本地缓存, 不阻塞)
     const 本地 = config.读取本地数据()
     // 回填已保存的账号密码(仅当开启保存时)
