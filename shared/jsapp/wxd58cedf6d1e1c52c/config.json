@@ -2,6 +2,6 @@
   "appId": "wxd58cedf6d1e1c52c",
   "name": "admin_app",
   "path": "page/login/login",
-  "versionCode": 24,
-  "versionName": "1.0.23"
+  "versionCode": 28,
+  "versionName": "1.0.27"
 }

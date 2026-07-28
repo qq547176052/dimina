@@ -371,6 +371,11 @@ export class MiniApp {
 			this.currentTabPath = normalizedPath
 			this._setTabBarVisible(true)
 			this._updateTabBarSelection(normalizedPath)
+		} else {
+			// 入口非 tab 页（如登录页）：显式隐藏 TabBar。
+			// _renderTabBar 渲染后 DOM 默认可见(display:flex)，而本分支此前未调用 _setTabBarVisible，
+			// 导致非 tab 入口页(如 login)错误展示底 tab；此处兜底隐藏，符合微信“tab 显隐由是否在 tabBar.list 决定”的语义
+			this._setTabBarVisible(false)
 		}
 
 		const isRestoringPageStack = this.appInfo.restoreStack?.length > 1

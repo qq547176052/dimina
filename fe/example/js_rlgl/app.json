@@ -1,7 +1,7 @@
 {
   "pages": [
-    "page/login/login",
     "page/index/index",
+    "page/login/login",
     "page/face/face",
     "page/face/face-edit",
     "page/max_image/max_image"

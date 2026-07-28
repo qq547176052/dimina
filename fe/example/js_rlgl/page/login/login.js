@@ -15,6 +15,7 @@
 //   2026-07-25 修正 HOME_PATH: 由越界旧路径(/page/tabBar/component/index/index)改为 js_rlgl 首页 /page/index/index(配合底部 tabBar 抓拍记录)
 //   2026-07-27 登录/刷新跳转由 reLaunch 改为 switchTab: 首页为 tabBar 页, redirectTo 跳 tab 页会被容器拦截失败(can not redirectTo a tabbar page), 故用 switchTab(跳 tab 页官方推荐, 仅销毁非 tab 的 login 并保留 tab 池, 比 reLaunch 轻量); 注: switchTab 仍换桥, 换桥空窗 bug 待框架方案 B(常驻 invoke 处理器)根治
 //   2026-07-27 修正"无保存账号密码且 token 快过期"分支: 原直接 switchTab 进首页会让即将过期(且无法静默续期)的 token 进首页、中途失效被踢; 改为留在登录页由用户手动登录(showToast 提示)
+//   2026-07-28 onLoad 登录态判断改用 config.读取本地数据异步(): 首次等待宿主共享数据合并, 修复本地 storage 空/旧但宿主有账号密码时误判未登录停留登录页
 const config = require('../../config.js') // 后端配置(含 api登录链接/login 函数 与 storage 键常量)
 const HOME_PATH = '/page/index/index'
 
@@ -35,60 +36,62 @@ Page({
       const info = wx.getSystemInfoSync()
       this.setData({ statusBarHeight: info.statusBarHeight || 0 })
     } catch (e) {}
-    // 读取本地持久化数据(整对象: token/user/是否保存/用户名/密码); 优先宿主共享数据(异步同步到本地缓存, 不阻塞)
-    const 本地 = config.读取本地数据()
-    // 回填已保存的账号密码(仅当开启保存时)
-    const saveAccount = 本地.是否保存 === true
-    if (saveAccount) {
-      this.setData({
-        saveAccount: true,
-        account: 本地.用户名,
-        password: 本地.密码,
-      })
-    }
-    // 已登录: 校验 token 是否快过期, 快过期则用保存的账号密码重新登录刷新
-    if (本地.token) {
-      // 这里解析打印一下token 这里面有过期时间 可以通过这个过期时间判断是否需要重新登录
-      const 令牌 = 本地.token
-      let 快过期 = false
-      try {
-        const 载荷 = JSON.parse(atob(令牌.split('.')[1] || ''))
-        console.log('token解析:', 载荷, '过期时间:', 载荷 && 载荷.exp ? new Date(载荷.exp * 1000).toLocaleString() : '未知')
-        if (载荷 && 载荷.exp) {
-          const 剩余毫秒 = 载荷.exp * 1000 - Date.now()
-          快过期 = 剩余毫秒 < 10 * 60 * 60 * 1000 // 10小时内过期视为快过期
+    // 异步读取本地持久化数据(整对象: token/user/是否保存/用户名/密码);
+    // 首次等待宿主共享数据合并完成, 避免本地 storage 空/旧数据在宿主合并前误判未登录而停留登录页
+    config.读取本地数据异步().then((本地) => {
+      // 回填已保存的账号密码(仅当开启保存时)
+      const saveAccount = 本地.是否保存 === true
+      if (saveAccount) {
+        this.setData({
+          saveAccount: true,
+          account: 本地.用户名,
+          password: 本地.密码,
+        })
+      }
+      // 已登录: 校验 token 是否快过期, 快过期则用保存的账号密码重新登录刷新
+      if (本地.token) {
+        // 这里解析打印一下token 这里面有过期时间 可以通过这个过期时间判断是否需要重新登录
+        const 令牌 = 本地.token
+        let 快过期 = false
+        try {
+          const 载荷 = JSON.parse(atob(令牌.split('.')[1] || ''))
+          console.log('token解析:', 载荷, '过期时间:', 载荷 && 载荷.exp ? new Date(载荷.exp * 1000).toLocaleString() : '未知')
+          if (载荷 && 载荷.exp) {
+            const 剩余毫秒 = 载荷.exp * 1000 - Date.now()
+            快过期 = 剩余毫秒 < 10 * 60 * 60 * 1000 // 10小时内过期视为快过期
+          }
+        } catch (错误) {
+          console.log('token解析失败:', 错误)
         }
-      } catch (错误) {
-        console.log('token解析失败:', 错误)
-      }
-      if (!快过期) {
-        wx.switchTab({ url: HOME_PATH }) // 未快过期: 直接进首页
+        if (!快过期) {
+          wx.switchTab({ url: HOME_PATH }) // 未快过期: 直接进首页
+          return
+        }
+        // 快过期: 用保存的账号密码重新登录刷新 token
+        const 账号 = 本地.用户名
+        const 密码 = 本地.密码
+        if (账号 && 密码) {
+          console.log('token快过期, 自动重新登录刷新')
+          this.setData({ loading: true })
+          config.登录(账号, 密码)
+            .then(() => {
+              const app = getApp()
+              if (app && app.globalData) app.globalData.hasLogin = true
+              wx.switchTab({ url: HOME_PATH })
+            })
+            .catch((错误) => {
+              this.setData({ loading: false })
+              wx.showToast({ title: 错误.message || '登录失败', icon: 'none' })
+            })
+          return
+        }
+        // 无保存的账号密码, 无法刷新: 不跳首页, 留在登录页由用户手动登录
+        // (token 仍有效但即将过期且无法静默续期, 进首页会中途失效被踢; 故留在当前页重新登录)
+        // wx.showToast({ title: '请重新登录', icon: 'none' })
+        console.log('token快过期, 本地没有保存账号密码, 无法自动刷新,需要手动登录')
         return
       }
-      // 快过期: 用保存的账号密码重新登录刷新 token
-      const 账号 = 本地.用户名
-      const 密码 = 本地.密码
-      if (账号 && 密码) {
-        console.log('token快过期, 自动重新登录刷新')
-        this.setData({ loading: true })
-        config.登录(账号, 密码)
-          .then(() => {
-            const app = getApp()
-            if (app && app.globalData) app.globalData.hasLogin = true
-            wx.switchTab({ url: HOME_PATH })
-          })
-          .catch((错误) => {
-            this.setData({ loading: false })
-            wx.showToast({ title: 错误.message || '登录失败', icon: 'none' })
-          })
-        return
-      }
-      // 无保存的账号密码, 无法刷新: 不跳首页, 留在登录页由用户手动登录
-      // (token 仍有效但即将过期且无法静默续期, 进首页会中途失效被踢; 故留在当前页重新登录)
-      // wx.showToast({ title: '请重新登录', icon: 'none' })
-      console.log('token快过期, 本地没有保存账号密码, 无法自动刷新,需要手动登录')
-      return
-    }
+    })
   },
 
   onAccountInput(e) {

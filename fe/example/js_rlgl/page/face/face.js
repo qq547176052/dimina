@@ -162,31 +162,33 @@ Page({
   },
   // 读取本地数据->校验账号密码与 token 有效期->必要时重新登录->加载列表
   确保Token() {
-    const data = config.读取本地数据()
-    const { 用户名, 密码, token } = data
-    this.setData({ token })
-    api.setToken(token)
-    if (!用户名 || !密码) {
-      wx.redirectTo({ url: '/page/login/login' })
-      return
-    }
-    const now = Math.floor(Date.now() / 1000)
-    const exp = 取Token过期时间(token)
-    const 即将过期 = !token || exp === 0 || (exp - now) <= TOKEN_EXPIRE_THRESHOLD
-    if (!即将过期) {
-      this.加载列表(true)
-      return
-    }
-    config.登录(用户名, 密码)
-      .then((res) => {
-        api.setToken(res.token)
-        this.setData({ token: res.token })
+    // 异步读取: 首次等待宿主共享数据合并完成, 避免本地 storage 空/旧数据在宿主合并前误判未登录而误跳登录页
+    config.读取本地数据异步().then((data) => {
+      const { 用户名, 密码, token } = data
+      this.setData({ token })
+      api.setToken(token)
+      if (!用户名 || !密码) {
+        wx.redirectTo({ url: '/page/login/login' })
+        return
+      }
+      const now = Math.floor(Date.now() / 1000)
+      const exp = 取Token过期时间(token)
+      const 即将过期 = !token || exp === 0 || (exp - now) <= TOKEN_EXPIRE_THRESHOLD
+      if (!即将过期) {
         this.加载列表(true)
-      })
-      .catch((e) => {
-        this.setData({ loadError: '登录失败: ' + (e && e.message || '未知错误'), list: [], loading: false, loadingMore: false, refreshing: false })
-        wx.showToast({ title: this.data.loadError, icon: 'none' })
-      })
+        return
+      }
+      config.登录(用户名, 密码)
+        .then((res) => {
+          api.setToken(res.token)
+          this.setData({ token: res.token })
+          this.加载列表(true)
+        })
+        .catch((e) => {
+          this.setData({ loadError: '登录失败: ' + (e && e.message || '未知错误'), list: [], loading: false, loadingMore: false, refreshing: false })
+          wx.showToast({ title: this.data.loadError, icon: 'none' })
+        })
+    })
   },
   // 加载人脸库列表(reset=true 重置分页/刷新)
   加载列表(reset) {
