@@ -57,6 +57,7 @@ import java.util.zip.ZipOutputStream
  *   2026-07-25 新增"获取小程序信息"事件(fetchMiniAppInfo): 从 cnb config.json 读 name/version, 供前端扫码确认框展示友好名称(空则前端回退 appId); 增加 url/响应码/原始内容/解析 name 诊断日志便于排查取不到 name
  *   2026-07-25 扫码下载(downloadminiapp.kt)改为强制装包(引擎 activatePendingUpdate force=true), 显式安装覆盖同版本不再跳过; 引擎 RemoteUpdateManager.activatePendingUpdate 新增 force 参数(默认 false, 更新/后台更新流程保持版本守卫)
  *   2026-07-27 修复"删除后再次扫码安装列表不显示": "下载小程序"成功回调中将 appId 从 deletedAppIds 内存屏蔽集合移除, 否则重装后仍被"获取列表"过滤掉而装了不显示
+ *   2026-07-29 修复"应用更新"失败卡死: 装包/激活异常时小程序已被本步骤开头关闭(closedLatch 已放行), 前台停已关闭状态致白屏; catch 内重建 LAUNCHER 回可用首页恢复
  */
 class MainActivity : ComponentActivity() {
 
@@ -433,6 +434,12 @@ class MainActivity : ComponentActivity() {
                 //     否则会因文件已被删除而返回 false, 误报"删除更新压缩包失败"
             } catch (e: Exception) {
                 LogUtils.e(TAG, "应用更新异常 appId=$appId: ${e.message}")
+                // 装包/激活阶段失败: 本步骤开头已关闭运行中的小程序(closedLatch 已放行),
+                // 若此处不恢复, 前台将停留已关闭状态导致白屏卡死; 故重建 LAUNCHER 回到可用首页
+                val restart = Intent(applicationContext, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                }
+                mainHandler.post { applicationContext.startActivity(restart) }
                 mainHandler.post {
                     callback.onFail(failMsg("应用更新失败: ${e.message}"))
                 }
