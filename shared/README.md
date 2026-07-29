@@ -91,7 +91,7 @@ shared/jsapp/wx92269e3b2f304afc/
 
 - 在 `android/app/build.gradle.kts` 中添加构建任务 `copySharedJsappToAssets`，实现 JSApp 的资源复制；
 - 在 `android/dimina/build.gradle.kts` 中添加构建任务 `copySharedJssdkToAssets`，实现 JSSDK 的资源复制。
-- JSApp 排除：在 `android/gradle.properties` 的 `excludeJsApps` 填入要跳过的小程序 appId（逗号分隔，如 `wxaaa,wxbbb`），`copySharedJsappToAssets` 会排除对应目录、不复制进 assets；留空则全部复制。
+- JSApp 白名单：在 `android/gradle.properties` 的 `includeJsApps` 填入要打包的小程序 appId（逗号分隔，如 `wxaaa,wxbbb`），`copySharedJsappToAssets` 仅复制对应目录进 assets；留空则全部复制。
 
 ### iOS 平台
 

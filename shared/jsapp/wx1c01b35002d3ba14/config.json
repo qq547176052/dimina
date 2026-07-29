@@ -2,6 +2,6 @@
   "appId": "wx1c01b35002d3ba14",
   "name": "Vant 组件库展示",
   "path": "pages/dashboard/index",
-  "versionCode": 7,
-  "versionName": "1.0.34"
+  "versionCode": 11,
+  "versionName": "1.0.38"
 }

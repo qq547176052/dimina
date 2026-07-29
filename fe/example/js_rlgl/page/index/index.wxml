@@ -62,13 +62,13 @@
                 </view>
                 <view class="filter-field">
                     <text class="filter-label">开始时间</text>
-                    <picker mode="date" value="{{filters.startTime}}" bindchange="onFilterDate" data-field="startTime">
+                    <picker mode="date" value="{{filters.startTime || today}}" bindchange="onFilterStartDate" bindcancel="onFilterDateCancelStart">
                         <view class="filter-picker">{{filters.startTime || '不限'}}</view>
                     </picker>
                 </view>
                 <view class="filter-field">
                     <text class="filter-label">结束时间</text>
-                    <picker mode="date" value="{{filters.endTime}}" bindchange="onFilterDate" data-field="endTime">
+                    <picker mode="date" value="{{filters.endTime || today}}" bindchange="onFilterEndDate" bindcancel="onFilterDateCancelEnd">
                         <view class="filter-picker">{{filters.endTime || '不限'}}</view>
                     </picker>
                 </view>

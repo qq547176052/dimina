@@ -6,6 +6,7 @@
 //   2026-07-27 token 改为打开时读一次(确保Token 读本地数据写入 this.data.token 与 api.setToken 缓存), 后续所有请求经 api.authHeaders 复用缓存, 不再每条请求(尤其每读一张抓拍图)都读本地数据; 登录换发新 token 后同步刷新 data 与 api 缓存
 //   2026-07-27 列表项点击跳转 max_image 大图详情: app.json 注册 max_image; record-card bindtap=onItemTap 传 payload(姓名/时间·摄像头·类型 + 人脸图 jpeg_url_face + 全景图 jpeg_url_body, 相对路径拼绝对地址); 入库按钮改 catchtap 阻止冒泡; 后端 /dd/face-records 已返回 jpeg_url_body, 无需改后端
 //   2026-07-28 onItemTap 跳转改 base64 传输(payload 经 utf8ToBase64 编码 + enc=1 标记), 取代 encodeURIComponent(JSON), 彻底规避 max_image 端二次 URL 编码导致 404; max_image 据 enc 标记走 base64 解码, 与宿主推送原始 JSON(旧逻辑)并存
+//   2026-07-29 修复日期筛选在 dimina 点击确定不填充: 根因是 dimina render 层事件机制(Picker.vue 用的 @/common/events.triggerEvent)组件内确认按钮的 event.currentTarget 是内部按钮 div, 不携带 wxml 上写在 <picker> 的 data-field, 故 e.currentTarget.dataset.field 为 undefined 导致 setData 到 filters.undefined 无效; 改为两个日期各自独立 handler(onFilterStartDate/onFilterEndDate)直接取可靠的 e.detail.value, 取消亦独立 handler 清空(取消=不限); value 仍用 filters.X||today 对齐微信默认选中当天
 const config = require('../../config.js')
 const api = require('../../utils/api.js')
 const base64 = require('../../utils/base64.js')
@@ -144,11 +145,17 @@ Page({
     filterOpen: false,
     filterCount: 0,
     version: '', // 调试用：顶部栏显示版本号以辨认是否更新，生产版本删除
+    today: '',   // 今日(YYYY-MM-DD)：日期筛选"未选(不限)"时作为 picker 默认选中值(对齐微信空值默认当天)
   },
   onLoad() {
     // 版本号: 优先取宿主注入的 appVersion, 无则回退兜底值
     const v = this.宿主版本()
     this.setData({ version: v })
+    // 今日(YYYY-MM-DD): 日期筛选器"未选"时作为默认选中值。
+    // 微信空 value 默认选中当天; dimina 空 value 会落入非法默认值且确定回传空串, 故显式给 today
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    this.setData({ today })
   },
   onShow() {
     // 每次进入 tab 都校验登录态并刷新列表
@@ -323,9 +330,22 @@ Page({
     const idx = Number(e.detail.value) || 0
     this.setData({ filterTypeIndex: idx, 'filters.faceLibrary': FACE_LIBRARY_FILTER_OPTIONS[idx].value })
   },
-  onFilterDate(e) {
-    const field = e.currentTarget.dataset.field
-    this.setData({ ['filters.' + field]: e.detail.value })
+  // 开始时间确定: dimina 组件内确认事件的 currentTarget 不携带 wxml 上的 data-*,
+  // 故不用 data-field, 改用独立 handler 直接取 e.detail.value(该字段在 dimina/微信均可靠)
+  onFilterStartDate(e) {
+    this.setData({ 'filters.startTime': e.detail.value })
+  },
+  // 结束时间确定
+  onFilterEndDate(e) {
+    this.setData({ 'filters.endTime': e.detail.value })
+  },
+  // 开始时间取消: 视为"不限"(清空该字段)
+  onFilterDateCancelStart() {
+    this.setData({ 'filters.startTime': '' })
+  },
+  // 结束时间取消: 视为"不限"(清空该字段)
+  onFilterDateCancelEnd() {
+    this.setData({ 'filters.endTime': '' })
   },
   resetFilter() {
     this.setData({
