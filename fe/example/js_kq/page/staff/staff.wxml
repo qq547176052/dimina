@@ -1,0 +1,53 @@
+<!-- 人员管理页 -->
+<view class="page">
+  <view class="searchbar">
+    <input
+      class="search-input"
+      placeholder="搜索姓名"
+      value="{{tempSearch}}"
+      bindinput="onSearchInput"
+      bindconfirm="onSearchConfirm"
+      confirm-type="search"
+    />
+    <view class="search-btn" bindtap="onSearchConfirm">搜索</view>
+    <view wx:if="{{searchName}}" class="search-clear" bindtap="onSearchClear">清空</view>
+  </view>
+
+  <scroll-view class="staff-scroll" scroll-y wx:if="{{list.length > 0}}">
+    <view class="staff-list">
+      <view
+        wx:for="{{list}}"
+        wx:key="id"
+        class="staff-card"
+        bindtap="onStaffTap"
+        data-id="{{item.id}}"
+        data-name="{{item.name}}"
+      >
+        <view class="staff-avatar">{{item.name[0]}}</view>
+        <view class="staff-body">
+          <view class="staff-name">{{item.name}}<text wx:if="{{item.alias}}" class="staff-alias">（{{item.alias}}）</text></view>
+          <view class="staff-row">
+            <text class="staff-label">部门</text>
+            <text class="staff-value">{{item.department || '—'}}</text>
+          </view>
+          <view class="staff-row">
+            <text class="staff-label">工号</text>
+            <text class="staff-value">{{item.workid || item.id}}</text>
+          </view>
+        </view>
+        <view class="staff-arrow">›</view>
+      </view>
+    </view>
+
+    <view class="status-tip status-footer">
+      <text wx:if="{{noMore}}">没有更多了</text>
+      <text wx:elif="{{loading}}">加载中...</text>
+    </view>
+  </scroll-view>
+
+  <view wx:if="{{list.length === 0 && !loading}}" class="status-tip">
+    <text wx:if="{{error}}" class="status-error">{{error}}</text>
+    <text wx:else>暂无人员</text>
+  </view>
+  <view wx:if="{{loading && list.length === 0}}" class="status-tip">加载中...</view>
+</view>

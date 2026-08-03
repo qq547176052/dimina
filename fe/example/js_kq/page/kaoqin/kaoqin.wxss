@@ -1,0 +1,298 @@
+/* 考勤统计页样式 */
+.page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #ededed;
+}
+
+/* 顶部栏 + 统计卡 + 列表 整体盒子 */
+.header-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #ededed;
+  padding-bottom: 20rpx;
+}
+.topbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 30rpx;
+  background: #fff;
+}
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+.picker-with-arrow {
+  position: relative;
+  padding-right: 36rpx;
+}
+.picker-with-arrow::after {
+  content: "";
+  position: absolute;
+  right: 12rpx;
+  top: 50%;
+  transform: translateY(-30%);
+  width: 0;
+  height: 0;
+  border-left: 8rpx solid transparent;
+  border-right: 8rpx solid transparent;
+  border-top: 8rpx solid #666;
+}
+.date-text {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1a1a1a;
+  padding: 8rpx 16rpx;
+  background: #f5f5f5;
+  border-radius: 10rpx;
+}
+.filter-btn {
+  position: relative;
+  padding: 10rpx 24rpx;
+  background: #07c160;
+  border-radius: 30rpx;
+}
+.filter-btn-text {
+  color: #fff;
+  font-size: 26rpx;
+}
+.filter-badge {
+  position: absolute;
+  top: -6rpx;
+  right: -6rpx;
+  min-width: 28rpx;
+  height: 28rpx;
+  line-height: 28rpx;
+  text-align: center;
+  background: #ff4d4f;
+  color: #fff;
+  font-size: 20rpx;
+  border-radius: 50%;
+}
+
+/* 统计卡 */
+.summary {
+  flex-shrink: 0;
+  margin: 20rpx;
+  background: linear-gradient(135deg, #07c160, #06ad56);
+  border-radius: 16rpx;
+  padding: 24rpx;
+  color: #fff;
+}
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+.sum-item {
+  flex: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+.sum-num {
+  font-size: 44rpx;
+  font-weight: 700;
+  line-height: 1.1;
+  min-height: 50rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sum-label {
+  font-size: 22rpx;
+  opacity: 0.9;
+  margin-top: 8rpx;
+  line-height: 1.1;
+}
+.sum-ok { color: #fff; }
+.sum-yellow { color: #ffe600; }
+.sum-red { color: #ff5252; }
+.summary-tip {
+  font-size: 20rpx;
+  opacity: 0.85;
+  border-top: 1rpx solid rgba(255,255,255,0.3);
+  padding-top: 12rpx;
+  margin-top: 4rpx;
+}
+.summary-personal {
+  font-size: 24rpx;
+  margin-top: 10rpx;
+  background: rgba(255,255,255,0.2);
+  padding: 6rpx 14rpx;
+  border-radius: 20rpx;
+  display: inline-block;
+}
+
+/* 列表 */
+.records-scroll {
+  flex: 1;
+  min-height: 0;
+}
+.record-list {
+  padding: 0 20rpx;
+}
+.record-card {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-radius: 14rpx;
+  padding: 20rpx;
+  margin-bottom: 16rpx;
+  border-left: 8rpx solid #e0e0e0;
+}
+
+.card-body {
+  flex: 1;
+  margin-left: 20rpx;
+  min-width: 0;
+}
+.card-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 8rpx;
+}
+.late-tag {
+  font-size: 20rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 16rpx;
+  margin-left: 10rpx;
+  color: #fff;
+}
+.late-green { background: #52c41a; }
+.late-yellow { background: #faad14; }
+.late-red { background: #ff4d4f; }
+.card-row {
+  display: flex;
+  align-items: center;
+  font-size: 24rpx;
+  color: #666;
+  margin-top: 4rpx;
+}
+.card-label {
+  width: 70rpx;
+  color: #999;
+  flex-shrink: 0;
+}
+.card-value {
+  flex: 1;
+  color: #333;
+}
+.loc-bad {
+  color: #ff4d4f;
+  font-size: 20rpx;
+  margin-left: 10rpx;
+}
+.card-btn {
+  font-size: 24rpx;
+  color: #07c160;
+  padding: 12rpx 20rpx;
+  border: 1rpx solid #07c160;
+  border-radius: 30rpx;
+  flex-shrink: 0;
+}
+
+/* 状态 */
+.status-tip {
+  text-align: center;
+  color: #999;
+  font-size: 26rpx;
+  padding: 60rpx 0;
+}
+.status-footer {
+  padding: 20rpx 0;
+}
+.status-error {
+  color: #ff4d4f;
+}
+
+/* 筛选抽屉 */
+.filter-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 9999;
+}
+.filter-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  border-radius: 24rpx 24rpx 0 0;
+  padding: 30rpx;
+  padding-bottom: calc(30rpx + env(safe-area-inset-bottom));
+  z-index: 10000;
+}
+.filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+.filter-title {
+  font-size: 32rpx;
+  font-weight: 600;
+}
+.filter-close {
+  font-size: 44rpx;
+  color: #999;
+  line-height: 1;
+}
+.filter-field {
+  margin-bottom: 30rpx;
+}
+.filter-label {
+  font-size: 26rpx;
+  color: #666;
+  display: block;
+  margin-bottom: 12rpx;
+}
+.filter-input {
+  border: 1rpx solid #ddd;
+  border-radius: 10rpx;
+  padding: 16rpx 20rpx;
+  font-size: 28rpx;
+}
+.filter-picker {
+  border: 1rpx solid #ddd;
+  border-radius: 10rpx;
+  padding: 16rpx 20rpx;
+  font-size: 28rpx;
+  background: #fafafa;
+}
+.filter-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 20rpx;
+}
+.filter-reset {
+  flex: 1;
+  text-align: center;
+  padding: 20rpx;
+  border-radius: 40rpx;
+  background: #f5f5f5;
+  color: #666;
+  font-size: 28rpx;
+}
+.filter-apply {
+  flex: 1;
+  text-align: center;
+  padding: 20rpx;
+  border-radius: 40rpx;
+  background: #07c160;
+  color: #fff;
+  font-size: 28rpx;
+}

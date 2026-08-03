@@ -1,0 +1,115 @@
+/* 人员管理页样式 */
+.page {
+  min-height: 100vh;
+  background: #ededed;
+  padding-bottom: 40rpx;
+}
+
+/* 搜索栏 */
+.searchbar {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 20rpx 30rpx;
+  background: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.search-input {
+  flex: 1;
+  background: #f5f5f5;
+  border-radius: 30rpx;
+  padding: 16rpx 28rpx;
+  font-size: 28rpx;
+}
+.search-btn {
+  padding: 16rpx 30rpx;
+  background: #07c160;
+  color: #fff;
+  border-radius: 30rpx;
+  font-size: 26rpx;
+}
+.search-clear {
+  padding: 16rpx 24rpx;
+  color: #666;
+  font-size: 26rpx;
+}
+
+/* 列表 */
+.staff-scroll {
+  height: calc(100vh - 120rpx);
+}
+.staff-list {
+  padding: 20rpx;
+}
+.staff-card {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-radius: 14rpx;
+  padding: 24rpx 20rpx;
+  margin-bottom: 16rpx;
+}
+.staff-avatar {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 50%;
+  background: #07c160;
+  color: #fff;
+  font-size: 36rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.staff-body {
+  flex: 1;
+  margin-left: 24rpx;
+  min-width: 0;
+}
+.staff-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 8rpx;
+}
+.staff-alias {
+  font-size: 24rpx;
+  font-weight: 400;
+  color: #999;
+}
+.staff-row {
+  display: flex;
+  font-size: 24rpx;
+  color: #666;
+  margin-top: 4rpx;
+}
+.staff-label {
+  width: 70rpx;
+  color: #999;
+  flex-shrink: 0;
+}
+.staff-value {
+  flex: 1;
+  color: #333;
+}
+.staff-arrow {
+  font-size: 48rpx;
+  color: #ccc;
+  margin-left: 10rpx;
+}
+
+/* 状态 */
+.status-tip {
+  text-align: center;
+  color: #999;
+  font-size: 26rpx;
+  padding: 60rpx 0;
+}
+.status-footer {
+  padding: 20rpx 0;
+}
+.status-error {
+  color: #ff4d4f;
+}

@@ -1,0 +1,124 @@
+<!-- 考勤统计页 -->
+<view class="page">
+
+  <view class="header-wrap">
+    <view class="topbar">
+      <view class="topbar-left">
+        <picker mode="date" value="{{dateText}}" end="{{maxDate}}" bindchange="onDateChange">
+          <view class="date-text picker-with-arrow">{{dateText}}</view>
+        </picker>
+      </view>
+      <view class="filter-btn" bindtap="onFilterOpen">
+        <text class="filter-btn-text">筛选</text>
+        <text wx:if="{{filterName || filterSourceIdx > 0}}" class="filter-badge">1</text>
+      </view>
+    </view>
+
+    <view class="summary" wx:if="{{summary}}">
+      <view class="summary-row">
+        <view class="sum-item">
+          <view class="sum-num">{{summary.shouldArrive}}</view>
+          <view class="sum-label">总数</view>
+        </view>
+        <view class="sum-item">
+          <view class="sum-num">{{summary.notArrived}}</view>
+          <view class="sum-label">未到</view>
+        </view>
+        <view class="sum-item">
+          <view class="sum-num sum-yellow">{{summary.late}}</view>
+          <view class="sum-label">迟到</view>
+        </view>
+      </view>
+      <view class="summary-row">
+        <view class="sum-item">
+          <view class="sum-num">{{summary.shouldArrive}}</view>
+          <view class="sum-label">应到</view>
+        </view>
+        <view class="sum-item">
+          <view class="sum-num">{{summary.arrived}}</view>
+          <view class="sum-label">实到</view>
+        </view>
+        <view class="sum-item">
+          <view class="sum-num sum-red">{{summary.seriousLate}}</view>
+          <view class="sum-label">严重迟到</view>
+        </view>
+      </view>
+      <view wx:if="{{personalName}}" class="summary-personal">个人明细：{{personalName}}</view>
+    </view>
+
+    <scroll-view class="records-scroll" scroll-y wx:if="{{list.length > 0}}">
+    <view class="record-list">
+      <view
+        wx:for="{{list}}"
+        wx:key="id"
+        class="record-card"
+      >
+        <view class="card-body">
+          <view class="card-name">
+            {{item.name}}
+            <text wx:if="{{item.lateLevel === 0}}" class="late-tag late-green">正常</text>
+            <text wx:elif="{{item.lateLevel === 1}}" class="late-tag late-yellow">迟到</text>
+            <text wx:elif="{{item.lateLevel === 2}}" class="late-tag late-red">严重迟到</text>
+          </view>
+          <view class="card-row">
+            <text class="card-label">时间</text>
+            <text class="card-value">{{item.checkTimeText}}</text>
+          </view>
+          <view class="card-row">
+            <text class="card-label">地点</text>
+            <text class="card-value">{{item.address || item.deviceName || '—'}}</text>
+          </view>
+          <view class="card-row">
+            <text class="card-label">来源</text>
+            <text class="card-value">{{item.source}}</text>
+          </view>
+        </view>
+
+        <view
+          wx:if="{{item.bgUrl}}"
+          class="card-btn"
+          bindtap="onPreview"
+          data-url="{{item.bgUrl}}"
+        >全景</view>
+      </view>
+    </view>
+
+    <view class="status-tip status-footer">
+      <text wx:if="{{noMore}}">没有更多了</text>
+      <text wx:elif="{{loading}}">加载中...</text>
+    </view>
+    </scroll-view>
+  </view>
+
+  <view wx:if="{{list.length === 0 && !loading}}" class="status-tip">
+    <text wx:if="{{error}}" class="status-error">{{error}}</text>
+    <text wx:else>暂无考勤记录</text>
+  </view>
+  <view wx:if="{{loading && list.length === 0}}" class="status-tip">加载中...</view>
+
+  <view wx:if="{{drawerShow}}" class="filter-mask" bindtap="onMaskTap">
+    <view class="filter-panel" catchtap="onStopPropagation">
+      <view class="filter-header">
+        <text class="filter-title">筛选</text>
+        <text class="filter-close" bindtap="onMaskTap">x</text>
+      </view>
+      <view class="filter-body">
+        <view class="filter-field">
+          <text class="filter-label">姓名</text>
+          <input class="filter-input" placeholder="模糊匹配姓名" value="{{tempName}}" bindinput="onNameInput" />
+        </view>
+        <view class="filter-field">
+          <text class="filter-label">来源</text>
+          <picker mode="selector" range="{{sourceOptions}}" value="{{tempSourceIdx}}" bindchange="onSourceChange">
+            <view class="filter-picker">{{sourceOptions[tempSourceIdx]}}</view>
+          </picker>
+        </view>
+      </view>
+      <view class="filter-actions">
+        <view class="filter-reset" bindtap="onFilterReset">重置</view>
+        <view class="filter-apply" bindtap="onFilterApply">应用</view>
+      </view>
+    </view>
+  </view>
+
+</view>
