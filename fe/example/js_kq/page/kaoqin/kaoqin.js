@@ -160,7 +160,7 @@ Page({
         }
         const next = (append ? this.data.list.concat(r.list) : r.list).map((it) => ({
           ...it,
-          faceSrc: api.attendance.imageUrlById(it.id, 'face'),
+          faceSrc: it.hasFaceImg ? api.attendance.imageUrlById(it.id, 'face') : '',
         }))
         this.setData({
           list: next,
