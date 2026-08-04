@@ -1,7 +1,7 @@
 {
   "appId": "wx9d702bc245372b6c",
-  "name": "js_kq",
+  "name": "考勤统计",
   "path": "page/login/login",
-  "versionCode": 2,
-  "versionName": "1.0.1"
+  "versionCode": 5,
+  "versionName": "1.0.4"
 }

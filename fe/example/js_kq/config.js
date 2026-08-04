@@ -25,7 +25,7 @@ const 环境列表 = {
   dev:  'http://192.168.88.189:8899',   // 开发: 局域网后端(http)
   prod: 'https://wx2.jsauto.hk.cn:8899', // 生产: 腾讯云域名(https)
 }
-const 环境变量 = 'prod' // 'dev' | 'prod'
+const 环境变量 = 'dev' // 'dev' | 'prod'
 const host = 环境列表[环境变量]
 
 

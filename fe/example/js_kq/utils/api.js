@@ -93,6 +93,12 @@ const attendance = {
     if (/^https?:\/\//i.test(path) || path.indexOf('wxfile://') === 0 || path.indexOf('data:') === 0) return path
     return `${BASE}/dd/attendance/image?path=${encodeURIComponent(path)}`
   },
+  // 按考勤记录 id + 类型取图(免中文路径): type=face|body|frame
+  imageUrlById(id, type) {
+    const vId = Number(id) || 0
+    if (!vId) return ''
+    return `${BASE}/dd/attendance/image-by-id?id=${vId}&type=${type || 'frame'}`
+  },
 }
 
 // 人员管理(小程序"人员管理"tab, 对标 PC face_dingtalk_staff.html)

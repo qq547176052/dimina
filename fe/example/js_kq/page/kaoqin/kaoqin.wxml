@@ -74,12 +74,15 @@
           </view>
         </view>
 
-        <view
-          wx:if="{{item.bgUrl}}"
-          class="card-btn"
+        <image
+          wx:if="{{item.faceSrc}}"
+          class="card-face"
+          src="{{item.faceSrc}}"
+          mode="aspectFill"
           bindtap="onPreview"
-          data-url="{{item.bgUrl}}"
-        >全景</view>
+          data-id="{{item.id}}"
+          data-type="frame"
+        ></image>
       </view>
     </view>
 
@@ -119,6 +122,27 @@
         <view class="filter-apply" bindtap="onFilterApply">应用</view>
       </view>
     </view>
+  </view>
+
+  <!-- 全屏图片查看器（交互同 js_rlgl max_image：双指缩放·单指拖动·点×关闭） -->
+  <view wx:if="{{viewerShow}}" class="viewer-mask">
+    <view
+      class="viewer-stage"
+      catchtouchstart="onViewerTouchStart"
+      catchtouchmove="onViewerTouchMove"
+      catchtouchend="onViewerTouchEnd"
+      catchtouchcancel="onViewerTouchEnd"
+    >
+      <image
+        class="viewer-img {{viewerAnim ? 'anim' : ''}}"
+        src="{{viewerUrl}}"
+        mode="widthFix"
+        style="transform: translate({{viewerX}}px, {{viewerY}}px) scale({{viewerScale}}) rotate({{viewerRotate}}deg);"
+      />
+    </view>
+    <view class="viewer-close" catchtap="onViewerClose">×</view>
+    <view class="viewer-rotate" catchtap="onViewerRotate">旋转</view>
+    <text class="viewer-tip">双指缩放 · 单指拖动 · 点×关闭</text>
   </view>
 
 </view>

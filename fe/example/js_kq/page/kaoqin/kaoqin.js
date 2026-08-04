@@ -31,6 +31,14 @@ Page({
     tempSourceIdx: 0,
     personalUserId: '',
     personalName: '',
+    // 图片查看器（交互同 js_rlgl/page/max_image）
+    viewerShow: false,
+    viewerUrl: '',
+    viewerScale: 1,
+    viewerRotate: 0,
+    viewerX: 0,
+    viewerY: 0,
+    viewerAnim: false,
   },
 
   onLoad(opts) {
@@ -150,7 +158,10 @@ Page({
           if (done) done()
           return
         }
-        const next = append ? this.data.list.concat(r.list) : r.list
+        const next = (append ? this.data.list.concat(r.list) : r.list).map((it) => ({
+          ...it,
+          faceSrc: api.attendance.imageUrlById(it.id, 'face'),
+        }))
         this.setData({
           list: next,
           page: page,
@@ -175,10 +186,84 @@ Page({
   },
 
   onPreview(e) {
-    const url = e.currentTarget.dataset.url
-    if (!url) return
-    const full = api.attendance.imageUrl(url)
-    wx.previewImage({ urls: [full], current: full })
+    const id = e.currentTarget.dataset.id
+    const type = e.currentTarget.dataset.type || 'frame'
+    if (!id) return
+    // 按考勤记录 id + 类型取图, 免去前端传中文路径
+    this.setData({
+      viewerShow: true,
+      viewerUrl: api.attendance.imageUrlById(id, type),
+      viewerScale: 1,
+      viewerRotate: 0,
+      viewerX: 0,
+      viewerY: 0,
+      viewerAnim: false,
+    })
+  },
+
+  onViewerClose() {
+    this.setData({ viewerShow: false })
+  },
+
+  onViewerRotate() {
+    this.setData({ viewerRotate: (this.data.viewerRotate + 90) % 360, viewerAnim: true })
+  },
+
+  // ===== 放大层自定义手势: 单指拖动 + 双指缩放（同 js_rlgl max_image）=====
+  onViewerTouchStart(e) {
+    const t = e.touches
+    const pt = (this._pt = this._pt || {})
+    this.setData({ viewerAnim: false })
+    if (t.length >= 2) {
+      pt.mode = 'pinch'
+      pt.startDist = touchDist(t[0], t[1])
+      pt.baseScale = this.data.viewerScale
+    } else {
+      const p = t[0]
+      pt.mode = 'pan'
+      pt.startX = p.clientX
+      pt.startY = p.clientY
+      pt.baseX = this.data.viewerX
+      pt.baseY = this.data.viewerY
+    }
+  },
+
+  onViewerTouchMove(e) {
+    const pt = this._pt
+    if (!pt) return
+    const t = e.touches
+    if (t.length >= 2) {
+      const d = touchDist(t[0], t[1])
+      const s = pt.baseScale * (d / (pt.startDist || d))
+      this.setData({ viewerScale: Math.max(1, Math.min(4, s)) })
+    } else if (t.length === 1) {
+      if (pt.mode !== 'pan') {
+        // 双指松一根 -> 切回单指拖动, 重新打底避免跳变
+        pt.mode = 'pan'
+        pt.startX = t[0].clientX
+        pt.startY = t[0].clientY
+        pt.baseX = this.data.viewerX
+        pt.baseY = this.data.viewerY
+      }
+      const dx = t[0].clientX - pt.startX
+      const dy = t[0].clientY - pt.startY
+      this.setData({ viewerX: pt.baseX + dx, viewerY: pt.baseY + dy })
+    }
+  },
+
+  onViewerTouchEnd(e) {
+    const pt = this._pt
+    if (!pt) return
+    if (e.touches.length === 0) {
+      this._pt = null
+    } else if (e.touches.length === 1) {
+      // 还剩一根手指(双指松开一根): 切回 pan 并打底
+      pt.mode = 'pan'
+      pt.startX = e.touches[0].clientX
+      pt.startY = e.touches[0].clientY
+      pt.baseX = this.data.viewerX
+      pt.baseY = this.data.viewerY
+    }
   },
 
   onFilterOpen() {
@@ -217,3 +302,10 @@ Page({
 
   onStopPropagation() {},
 })
+
+// 两指间距（同 js_rlgl max_image）
+function touchDist(a, b) {
+  const dx = a.clientX - b.clientX
+  const dy = a.clientY - b.clientY
+  return Math.sqrt(dx * dx + dy * dy)
+}
